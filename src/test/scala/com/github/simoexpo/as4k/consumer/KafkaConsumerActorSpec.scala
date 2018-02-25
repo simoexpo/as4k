@@ -12,6 +12,7 @@ import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsetAsync, CommitOffsetSync, ConsumerToken}
+import com.github.simoexpo.as4k.factory.KRecord
 
 import scala.collection.JavaConverters._
 
@@ -55,15 +56,15 @@ class KafkaConsumerActorSpec
 
     "allow to commit a list of ConsumerRecord synchronously" in {
 
+      val kRecords = records.map(KRecord(_))
+
       doNothing().when(kafkaConsumer).commitSync(any[Map[TopicPartition, OffsetAndMetadata]].asJava)
 
-      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetSync(records)
+      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetSync(kRecords)
 
       whenReady(recordsCommittedFuture) { _ =>
-        records.foreach { record =>
-          val topicPartition = new TopicPartition(record.topic(), record.partition())
-          val offsetAndMetadata = new OffsetAndMetadata(record.offset() + 1)
-          val topicAndOffset = Map(topicPartition -> offsetAndMetadata).asJava
+        kRecords.foreach { record =>
+          val topicAndOffset = committableMetadata(record)
           verify(kafkaConsumer).commitSync(topicAndOffset)
         }
       }
@@ -79,19 +80,25 @@ class KafkaConsumerActorSpec
 
     "allow to commit a list of ConsumerRecord asynchronously" in {
 
+      val kRecords = records.map(KRecord(_))
+
       doNothing().when(kafkaConsumer).commitAsync(any[Map[TopicPartition, OffsetAndMetadata]].asJava, any[OffsetCommitCallback])
 
-      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetAsync(records, callback)
+      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetAsync(kRecords, callback)
 
       whenReady(recordsCommittedFuture) { _ =>
-        records.foreach { record =>
-          val topicPartition = new TopicPartition(record.topic(), record.partition())
-          val offsetAndMetadata = new OffsetAndMetadata(record.offset() + 1)
-          val topicAndOffset = Map(topicPartition -> offsetAndMetadata).asJava
+        kRecords.foreach { record =>
+          val topicAndOffset = committableMetadata(record)
           verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
         }
       }
     }
+  }
+
+  private def committableMetadata[K, V](record: KRecord[K, V]) = {
+    val topicPartition = new TopicPartition(record.topic, record.partition)
+    val offsetAndMetadata = new OffsetAndMetadata(record.offset + 1)
+    Map(topicPartition -> offsetAndMetadata).asJava
   }
 
   private def aConsumerRecord[K, V](offset: Long, key: K, value: V) =

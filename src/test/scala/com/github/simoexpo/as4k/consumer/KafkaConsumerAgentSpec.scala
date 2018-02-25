@@ -11,6 +11,7 @@ import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsetAsync, CommitOffsetSync, ConsumerToken}
+import com.github.simoexpo.as4k.factory.{KRecord, OffsetCommitCallbackFactory}
 
 import scala.collection.JavaConverters._
 
@@ -43,11 +44,11 @@ class KafkaConsumerAgentSpec
 
   "KafkaConsumerAgent" should {
 
-    val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n")).toList
+    val consumerRecordList = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n")).toList
 
     "ask the consumer actor to poll for new records" in {
 
-      val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), records.asJava)).asJava)
+      val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), consumerRecordList.asJava)).asJava)
 
       val recordsConsumedFuture =
         kafkaConsumerAgent.askForRecords(ConsumerToken).map(_.asInstanceOf[ConsumerRecords[Int, String]])
@@ -63,11 +64,11 @@ class KafkaConsumerAgentSpec
 
     "ask the consumer actor to commit a single ConsumerRecord synchronously" in {
 
-      val record = records.head
+      val kRecord = KRecord(consumerRecordList.head)
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commit(record)
+      val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecord)
 
-      kafkaConsumerActor.expectMsg(CommitOffsetSync(List(record)))
+      kafkaConsumerActor.expectMsg(CommitOffsetSync(List(kRecord)))
       kafkaConsumerActor.reply(())
 
       whenReady(recordsCommittedFuture) { _ =>
@@ -77,11 +78,13 @@ class KafkaConsumerAgentSpec
 
     "ask the consumer actor to commit a list of ConsumerRecord synchronously" in {
 
+      val kRecords = consumerRecordList.map(KRecord(_))
+
       doNothing().when(kafkaConsumer).commitSync(any[Map[TopicPartition, OffsetAndMetadata]].asJava)
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commit(records)
+      val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecords)
 
-      kafkaConsumerActor.expectMsg(CommitOffsetSync(records))
+      kafkaConsumerActor.expectMsg(CommitOffsetSync(kRecords))
       kafkaConsumerActor.reply(())
 
       whenReady(recordsCommittedFuture) { _ =>
@@ -89,7 +92,7 @@ class KafkaConsumerAgentSpec
       }
     }
 
-    val callback = { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
+    val callback = OffsetCommitCallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
       exception match {
         case None     => println(s"successfully commit offset $offset")
         case Some(ex) => throw ex
@@ -98,11 +101,11 @@ class KafkaConsumerAgentSpec
 
     "ask the consumer actor to commit a single ConsumerRecord asynchronously" in {
 
-      val record = records.head
+      val kRecord = KRecord(consumerRecordList.head)
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(record, callback)
+      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecord, callback)
 
-      val actualRecords = List(record)
+      val actualRecords = List(kRecord)
 
       kafkaConsumerActor.expectMsgPF() {
         case CommitOffsetAsync(`actualRecords`, _) => ()
@@ -116,10 +119,12 @@ class KafkaConsumerAgentSpec
 
     "ask the consumer actor to commit a list of ConsumerRecord asynchronously" in {
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(records, callback)
+      val kRecords = consumerRecordList.map(KRecord(_))
+
+      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecords, callback)
 
       kafkaConsumerActor.expectMsgPF() {
-        case CommitOffsetAsync(`records`, _) => ()
+        case CommitOffsetAsync(`kRecords`, _) => ()
       }
       kafkaConsumerActor.reply(())
 

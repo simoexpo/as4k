@@ -2,17 +2,17 @@ package com.github.simoexpo.as4k
 
 import akka.stream.scaladsl.Sink
 import com.github.simoexpo.ActorSystemSpec
-import com.github.simoexpo.as4k.conversion.CommitCallback.CommitCallback
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.mockito.Mockito.{atLeast => invokedAtLeast, _}
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
-import org.mockito.ArgumentMatchers.{eq => mockitoEq, any}
+import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import com.github.simoexpo.as4k.KSource._
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.ConsumerToken
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
+import com.github.simoexpo.as4k.factory.{KRecord, OffsetCommitCallbackFactory}
 import org.mockito.invocation.InvocationOnMock
 
 import scala.collection.JavaConverters._
@@ -44,6 +44,7 @@ class KSourceSpec
     "produce a Source from the records consumed by a kafka consumer" in {
 
       val totalRecordsSize = Seq(records1, records2, records3).map(_.size).sum
+      val expectedRecords = Seq(records1, records2, records3).flatMap(_.asScala).map(KRecord(_))
 
       when(kafkaConsumerAgent.askForRecords(ConsumerToken))
         .thenReturn(Future.successful(new ConsumerRecords(Map((new TopicPartition(topic, partition), records1)).asJava)))
@@ -54,7 +55,7 @@ class KSourceSpec
 
       whenReady(recordsConsumed) { records =>
         records.size shouldBe totalRecordsSize
-        records.toList shouldBe (records1.asScala ++ records2.asScala ++ records3.asScala).toList
+        records.toList shouldBe expectedRecords
 
         verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
 
@@ -64,6 +65,7 @@ class KSourceSpec
     "not end when doesn't receive records when asking the kafka consumer agent" in {
 
       val totalRecordsSize = Seq(records1, records2).map(_.size).sum
+      val expectedRecords = Seq(records1, records2).flatMap(_.asScala).map(KRecord(_))
 
       val emptyRecords =
         new ConsumerRecords(Map((new TopicPartition(topic, partition), List.empty[ConsumerRecord[Int, String]].asJava)).asJava)
@@ -77,7 +79,7 @@ class KSourceSpec
 
       whenReady(recordsConsumed) { records =>
         records.size shouldBe totalRecordsSize
-        records.toList shouldBe (records1.asScala ++ records2.asScala).toList
+        records.toList shouldBe expectedRecords
 
         verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
 
@@ -87,10 +89,11 @@ class KSourceSpec
     "call synchronously commit on KafkaConsumerAgent for a single ConsumerRecord" in {
 
       val totalRecordsSize = records1.size
+      val expectedRecords = records1.asScala.map(KRecord(_))
 
       when(kafkaConsumerAgent.askForRecords(ConsumerToken))
         .thenReturn(Future.successful(new ConsumerRecords(Map((new TopicPartition(topic, partition), records1)).asJava)))
-      when(kafkaConsumerAgent.commit(any[ConsumerRecord[Int, String]])).thenAnswer((invocation: InvocationOnMock) => {
+      when(kafkaConsumerAgent.commit(any[KRecord[Int, String]])).thenAnswer((invocation: InvocationOnMock) => {
         Future.successful(invocation.getArgument[ConsumerRecord[Int, String]](0))
       })
 
@@ -99,7 +102,7 @@ class KSourceSpec
 
       whenReady(recordConsumed) { _ =>
         verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        records1.asScala.foreach { record =>
+        expectedRecords.foreach { record =>
           verify(kafkaConsumerAgent).commit(record)
         }
       }
@@ -109,10 +112,11 @@ class KSourceSpec
 
       val totalRecordsSize = records1.size
       val groupSize = 10
+      val expectedRecords = records1.asScala.map(KRecord(_))
 
       when(kafkaConsumerAgent.askForRecords(ConsumerToken))
         .thenReturn(Future.successful(new ConsumerRecords(Map((new TopicPartition(topic, partition), records1)).asJava)))
-      when(kafkaConsumerAgent.commit(any[Seq[ConsumerRecord[Int, String]]])).thenAnswer((invocation: InvocationOnMock) => {
+      when(kafkaConsumerAgent.commit(any[Seq[KRecord[Int, String]]])).thenAnswer((invocation: InvocationOnMock) => {
         Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
       })
 
@@ -125,15 +129,15 @@ class KSourceSpec
           .mapConcat(_.toList)
           .runWith(Sink.seq)
 
-      whenReady(recordConsumed) { records =>
+      whenReady(recordConsumed) { _ =>
         verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        records.grouped(10).foreach { recordsGroup =>
+        expectedRecords.grouped(10).foreach { recordsGroup =>
           verify(kafkaConsumerAgent).commit(recordsGroup)
         }
       }
     }
 
-    val callback: CommitCallback = { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
+    val callback = OffsetCommitCallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
       exception match {
         case None     => println(s"successfully commit offset $offset")
         case Some(ex) => throw ex
@@ -143,10 +147,11 @@ class KSourceSpec
     "call asynchronously commit on KafkaConsumerAgent for a single ConsumerRecord" in {
 
       val totalRecordsSize = records1.size
+      val expectedRecords = records1.asScala.map(KRecord(_))
 
       when(kafkaConsumerAgent.askForRecords(ConsumerToken))
         .thenReturn(Future.successful(new ConsumerRecords(Map((new TopicPartition(topic, partition), records1)).asJava)))
-      when(kafkaConsumerAgent.commitAsync(any[ConsumerRecord[Int, String]], mockitoEq(callback)))
+      when(kafkaConsumerAgent.commitAsync(any[KRecord[Int, String]], mockitoEq(callback)))
         .thenAnswer((invocation: InvocationOnMock) => {
           Future.successful(invocation.getArgument[ConsumerRecord[Int, String]](0))
         })
@@ -160,7 +165,7 @@ class KSourceSpec
 
       whenReady(recordConsumed) { _ =>
         verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        records1.asScala.foreach { record =>
+        expectedRecords.foreach { record =>
           verify(kafkaConsumerAgent).commitAsync(record, callback)
         }
       }
@@ -170,10 +175,11 @@ class KSourceSpec
 
       val totalRecordsSize = records1.size
       val groupSize = 10
+      val expectedRecords = records1.asScala.map(KRecord(_))
 
       when(kafkaConsumerAgent.askForRecords(ConsumerToken))
         .thenReturn(Future.successful(new ConsumerRecords(Map((new TopicPartition(topic, partition), records1)).asJava)))
-      when(kafkaConsumerAgent.commitAsync(any[Seq[ConsumerRecord[Int, String]]], mockitoEq(callback)))
+      when(kafkaConsumerAgent.commitAsync(any[Seq[KRecord[Int, String]]], mockitoEq(callback)))
         .thenAnswer((invocation: InvocationOnMock) => {
           Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
         })
@@ -187,9 +193,9 @@ class KSourceSpec
           .mapConcat(_.toList)
           .runWith(Sink.seq)
 
-      whenReady(recordConsumed) { records =>
+      whenReady(recordConsumed) { _ =>
         verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        records.grouped(10).foreach { recordsGroup =>
+        expectedRecords.grouped(10).foreach { recordsGroup =>
           verify(kafkaConsumerAgent).commitAsync(recordsGroup, callback)
         }
       }
