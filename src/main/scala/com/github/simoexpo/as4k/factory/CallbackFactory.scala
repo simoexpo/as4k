@@ -8,7 +8,7 @@ import org.apache.kafka.common.TopicPartition
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
-object OffsetCommitCallbackFactory {
+object CallbackFactory {
 
   def apply(callback: (Map[TopicPartition, OffsetAndMetadata], Option[Exception]) => Unit): OffsetCommitCallback =
     new OffsetCommitCallback {

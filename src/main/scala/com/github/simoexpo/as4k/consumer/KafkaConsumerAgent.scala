@@ -5,19 +5,21 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsetAsync, CommitOffsetSync, ConsumerToken}
 import com.github.simoexpo.as4k.factory.KRecord
-import org.apache.kafka.clients.consumer.{KafkaConsumer, OffsetCommitCallback}
+import org.apache.kafka.clients.consumer.OffsetCommitCallback
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 
-class KafkaConsumerAgent[K, V](kafkaConsumer: KafkaConsumer[K, V], pollingInterval: Long)(implicit actorSystem: ActorSystem,
-                                                                                          timeout: Timeout) {
+class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollingInterval: Long)(
+    implicit actorSystem: ActorSystem,
+    timeout: Timeout) {
 
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
-  protected val actor: ActorRef = actorSystem.actorOf(KafkaConsumerActor.props(kafkaConsumer, pollingInterval))
+  protected val actor: ActorRef = actorSystem.actorOf(KafkaConsumerActor.props(consumerOption, pollingInterval))
 
-  def askForRecords(token: ConsumerToken): Future[Any] = actor ? token
+  def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =
+    (actor ? token).map(_.asInstanceOf[List[KRecord[K, V]]])
 
   def commit(record: KRecord[K, V]): Future[KRecord[K, V]] =
     (actor ? CommitOffsetSync(List(record))).map(_ => record)

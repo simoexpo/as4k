@@ -2,6 +2,7 @@ package com.github.simoexpo.as4k.consumer
 
 import java.util
 
+import akka.actor.Props
 import akka.pattern.ask
 import com.github.simoexpo.ActorSystemSpec
 import org.apache.kafka.clients.consumer._
@@ -11,7 +12,7 @@ import org.mockito.Mockito._
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
-import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsetAsync, CommitOffsetSync, ConsumerToken}
+import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
 import com.github.simoexpo.as4k.factory.KRecord
 
 import scala.collection.JavaConverters._
@@ -25,11 +26,14 @@ class KafkaConsumerActorSpec
     with IntegrationPatience
     with BeforeAndAfterEach {
 
+  private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
 
   private val PollingInterval = 200
 
-  private val kafkaConsumerActor = system.actorOf(KafkaConsumerActor.props(kafkaConsumer, PollingInterval))
+  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingInterval) {
+    override protected val consumer = kafkaConsumer
+  }))
 
   override def beforeEach(): Unit =
     reset(kafkaConsumer)
@@ -37,59 +41,110 @@ class KafkaConsumerActorSpec
   val topic = "topic"
   val partition = 1
 
-  "KafkaConsumerActor" should {
+  "KafkaConsumerActor" when {
 
     val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n")).toList
 
-    "poll new records with the kafka consumer when receive a ConsumerToken" in {
+    "polling for new records" should {
 
-      val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), records.asJava)).asJava)
+      "get the records from kafka consumer" in {
 
-      when(kafkaConsumer.poll(PollingInterval)).thenReturn(consumerRecords)
+        val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), records.asJava)).asJava)
 
-      val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
+        val expectedKRecords = consumerRecords.iterator().asScala.map(KRecord(_)).toList
 
-      whenReady(recordsConsumedFuture) { recordsConsumed =>
-        recordsConsumed.asInstanceOf[ConsumerRecords[Int, String]] shouldBe consumerRecords
+        when(kafkaConsumer.poll(PollingInterval)).thenReturn(consumerRecords)
+
+        val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
+
+        whenReady(recordsConsumedFuture) { recordsConsumed =>
+          recordsConsumed.asInstanceOf[List[KRecord[Int, String]]] shouldBe expectedKRecords
+        }
       }
-    }
 
-    "allow to commit a list of ConsumerRecord synchronously" in {
+      "fail with a KafkaPollingException if the kafka consumer fails" in {
 
-      val kRecords = records.map(KRecord(_))
+        when(kafkaConsumer.poll(PollingInterval)).thenThrow(new RuntimeException("something bad happened!"))
 
-      doNothing().when(kafkaConsumer).commitSync(any[Map[TopicPartition, OffsetAndMetadata]].asJava)
+        val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
-      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetSync(kRecords)
-
-      whenReady(recordsCommittedFuture) { _ =>
-        kRecords.foreach { record =>
-          val topicAndOffset = committableMetadata(record)
-          verify(kafkaConsumer).commitSync(topicAndOffset)
+        whenReady(recordsConsumedFuture.failed) { exception =>
+          exception shouldBe a[KafkaPollingException]
         }
       }
     }
 
-    val callback = new OffsetCommitCallback {
-      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
-        exception match {
-          case null => println(s"successfully commit offset $offsets")
-          case ex   => throw ex
+    "committing new records synchronously" should {
+
+      "call kafka consumer to commit a list of ConsumerRecord" in {
+
+        val kRecords = records.map(KRecord(_))
+
+        doNothing().when(kafkaConsumer).commitSync(any[Map[TopicPartition, OffsetAndMetadata]].asJava)
+
+        val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetSync(kRecords)
+
+        whenReady(recordsCommittedFuture) { _ =>
+          kRecords.foreach { record =>
+            val topicAndOffset = committableMetadata(record)
+            verify(kafkaConsumer).commitSync(topicAndOffset)
+          }
         }
+      }
+
+      "fail with a KafkaCommitException if the kafka consumer fails" in {
+
+        val kRecords = records.map(KRecord(_))
+
+        when(kafkaConsumer.commitSync(any[Map[TopicPartition, OffsetAndMetadata]].asJava))
+          .thenThrow(new RuntimeException("something bad happened!"))
+
+        val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetSync(kRecords)
+
+        whenReady(recordsCommittedFuture.failed) { exception =>
+          exception shouldBe a[KafkaCommitException]
+        }
+      }
+
     }
 
-    "allow to commit a list of ConsumerRecord asynchronously" in {
+    "committing new records asynchronously" should {
 
-      val kRecords = records.map(KRecord(_))
+      val callback = new OffsetCommitCallback {
+        override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
+          exception match {
+            case null => println(s"successfully commit offset $offsets")
+            case ex   => throw ex
+          }
+      }
 
-      doNothing().when(kafkaConsumer).commitAsync(any[Map[TopicPartition, OffsetAndMetadata]].asJava, any[OffsetCommitCallback])
+      "call kafka consumer to commit a list of ConsumerRecord" in {
 
-      val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetAsync(kRecords, callback)
+        val kRecords = records.map(KRecord(_))
 
-      whenReady(recordsCommittedFuture) { _ =>
-        kRecords.foreach { record =>
-          val topicAndOffset = committableMetadata(record)
-          verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
+        doNothing().when(kafkaConsumer).commitAsync(any[Map[TopicPartition, OffsetAndMetadata]].asJava, any[OffsetCommitCallback])
+
+        val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetAsync(kRecords, callback)
+
+        whenReady(recordsCommittedFuture) { _ =>
+          kRecords.foreach { record =>
+            val topicAndOffset = committableMetadata(record)
+            verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
+          }
+        }
+      }
+
+      "fail with a KafkaCommitException if the kafka consumer fails" in {
+
+        val kRecords = records.map(KRecord(_))
+
+        when(kafkaConsumer.commitAsync(any[Map[TopicPartition, OffsetAndMetadata]].asJava, any[OffsetCommitCallback]))
+          .thenThrow(new RuntimeException("something bad happened!"))
+
+        val recordsCommittedFuture = kafkaConsumerActor ? CommitOffsetAsync(kRecords, callback)
+
+        whenReady(recordsCommittedFuture.failed) { exception =>
+          exception shouldBe a[KafkaCommitException]
         }
       }
     }

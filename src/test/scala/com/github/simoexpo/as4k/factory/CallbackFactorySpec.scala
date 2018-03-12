@@ -7,18 +7,17 @@ import org.scalatest.{Matchers, WordSpec}
 
 import scala.collection.JavaConverters._
 
-class OffsetCommitCallbackFactorySpec extends WordSpec with Matchers with MockitoSugar {
+class CallbackFactorySpec extends WordSpec with Matchers with MockitoSugar {
 
-  "OffsetCommitCallbackFactory" should {
+  "CallbackFactory" should {
 
     "create an OffsetCommitCallback with the defined behavior" in {
 
-      val callback = OffsetCommitCallbackFactory {
-        (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
-          exception match {
-            case None     => println(s"successfully commit offset $offset")
-            case Some(ex) => throw ex
-          }
+      val callback = CallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
+        exception match {
+          case None     => println(s"successfully commit offset $offset")
+          case Some(ex) => throw ex
+        }
       }
 
       val offset: Map[TopicPartition, OffsetAndMetadata] = Map.empty
