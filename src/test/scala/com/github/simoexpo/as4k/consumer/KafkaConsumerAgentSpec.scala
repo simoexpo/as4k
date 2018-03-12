@@ -1,17 +1,15 @@
 package com.github.simoexpo.as4k.consumer
 
-import akka.testkit.TestProbe
 import akka.actor.ActorRef
+import akka.testkit.TestProbe
 import com.github.simoexpo.ActorSystemSpec
+import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
+import com.github.simoexpo.as4k.factory.{CallbackFactory, KRecord}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
-import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsetAsync, CommitOffsetSync, ConsumerToken}
-import com.github.simoexpo.as4k.factory.{KRecord, CallbackFactory}
-
-import scala.collection.JavaConverters._
+import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
 class KafkaConsumerAgentSpec
     extends WordSpec
@@ -37,77 +35,121 @@ class KafkaConsumerAgentSpec
   val topic = "topic"
   val partition = 1
 
-  "KafkaConsumerAgent" should {
+  "KafkaConsumerAgent" when {
 
     val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
 
-    "ask the consumer actor to poll for new records" in {
+    "asking the consumer actor to poll" should {
 
-      val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+      "retrieve new records" in {
 
-      kafkaConsumerActor.expectMsg(ConsumerToken)
-      kafkaConsumerActor.reply(kRecords)
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
 
-      whenReady(recordsConsumedFuture) { recordsConsumed =>
-        recordsConsumed shouldBe kRecords
+        kafkaConsumerActor.expectMsg(ConsumerToken)
+        kafkaConsumerActor.reply(kRecords)
+
+        whenReady(recordsConsumedFuture) { recordsConsumed =>
+          recordsConsumed shouldBe kRecords
+        }
+      }
+
+      "fail with a KafkaPollingException if the consumer actor fails" in {
+
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+
+        kafkaConsumerActor.expectMsg(ConsumerToken)
+        kafkaConsumerActor.reply(
+          akka.actor.Status.Failure(KafkaPollingException(new RuntimeException("Something bad happened!"))))
+
+        whenReady(recordsConsumedFuture.failed) { exception =>
+          exception shouldBe a[KafkaPollingException]
+        }
       }
     }
 
-    "ask the consumer actor to commit a single ConsumerRecord synchronously" in {
+    "asking the consumer actor to synchronously commit" should {
 
-      val kRecord = kRecords.head
+      "commit a single ConsumerRecord" in {
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecord)
+        val kRecord = kRecords.head
 
-      kafkaConsumerActor.expectMsg(CommitOffsetSync(List(kRecord)))
-      kafkaConsumerActor.reply(())
+        val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecord)
 
-      recordsCommittedFuture.futureValue shouldBe kRecord
-    }
+        kafkaConsumerActor.expectMsg(CommitOffsetSync(List(kRecord)))
+        kafkaConsumerActor.reply(())
 
-    "ask the consumer actor to commit a list of ConsumerRecord synchronously" in {
+        recordsCommittedFuture.futureValue shouldBe kRecord
+      }
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecords)
+      "commit a list of ConsumerRecord" in {
 
-      kafkaConsumerActor.expectMsg(CommitOffsetSync(kRecords))
-      kafkaConsumerActor.reply(())
+        val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecords)
 
-      recordsCommittedFuture.futureValue shouldBe kRecords
-    }
+        kafkaConsumerActor.expectMsg(CommitOffsetSync(kRecords))
+        kafkaConsumerActor.reply(())
 
-    val callback = CallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
-      exception match {
-        case None     => println(s"successfully commit offset $offset")
-        case Some(ex) => throw ex
+        recordsCommittedFuture.futureValue shouldBe kRecords
+      }
+
+      "fail with a KafkaCommitException if the consumer actor fails" in {
+
+        val recordsCommittedFuture = kafkaConsumerAgent.commit(kRecords)
+
+        kafkaConsumerActor.expectMsg(CommitOffsetSync(kRecords))
+        kafkaConsumerActor.reply(akka.actor.Status.Failure(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        recordsCommittedFuture.failed.futureValue shouldBe a[KafkaCommitException]
       }
     }
 
-    "ask the consumer actor to commit a single ConsumerRecord asynchronously" in {
+    "asking the consumer actor to asynchronously commit" should {
 
-      val kRecord = kRecords.head
-
-      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecord, callback)
-
-      val actualRecords = List(kRecord)
-
-      kafkaConsumerActor.expectMsgPF() {
-        case CommitOffsetAsync(`actualRecords`, _) => ()
+      val callback = CallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
+        exception match {
+          case None     => println(s"successfully commit offset $offset")
+          case Some(ex) => throw ex
+        }
       }
-      kafkaConsumerActor.reply(())
 
-      recordsCommittedFuture.futureValue shouldBe kRecord
-    }
+      "commit a single ConsumerRecord" in {
 
-    "ask the consumer actor to commit a list of ConsumerRecord asynchronously" in {
+        val kRecord = kRecords.head
 
-      val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecords, callback)
+        val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecord, callback)
 
-      kafkaConsumerActor.expectMsgPF() {
-        case CommitOffsetAsync(`kRecords`, _) => ()
+        val actualRecords = List(kRecord)
+
+        kafkaConsumerActor.expectMsgPF() {
+          case CommitOffsetAsync(`actualRecords`, _) => ()
+        }
+        kafkaConsumerActor.reply(())
+
+        recordsCommittedFuture.futureValue shouldBe kRecord
       }
-      kafkaConsumerActor.reply(())
 
-      recordsCommittedFuture.futureValue shouldBe kRecords
+      "commit a list of ConsumerRecord" in {
+
+        val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecords, callback)
+
+        kafkaConsumerActor.expectMsgPF() {
+          case CommitOffsetAsync(`kRecords`, _) => ()
+        }
+        kafkaConsumerActor.reply(())
+
+        recordsCommittedFuture.futureValue shouldBe kRecords
+      }
+
+      "fail with a KafkaCommitException if the consumer actor fails" in {
+
+        val recordsCommittedFuture = kafkaConsumerAgent.commitAsync(kRecords, callback)
+
+        kafkaConsumerActor.expectMsgPF() {
+          case CommitOffsetAsync(`kRecords`, _) => ()
+        }
+        kafkaConsumerActor.reply(akka.actor.Status.Failure(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        recordsCommittedFuture.failed.futureValue shouldBe a[KafkaCommitException]
+      }
     }
   }
 
