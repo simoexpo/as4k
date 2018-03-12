@@ -3,6 +3,7 @@ package com.github.simoexpo.as4k
 import akka.stream.scaladsl.{RestartSource, Source}
 import com.github.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerIterator}
 import com.github.simoexpo.as4k.factory.KRecord
+import com.github.simoexpo.as4k.producer.KafkaProducerAgent
 import org.apache.kafka.clients.consumer._
 
 import scala.concurrent.ExecutionContext
@@ -43,6 +44,12 @@ object KSource {
     def mapValue[Out](fun: V => Out): Source[KRecord[K, Out], Any] =
       stream.map(_.mapValue(fun))
 
+    def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(1)(kafkaProducerAgent.produce)
+
+    def produceInTransaction(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(1)(kafkaProducerAgent.produceAndCommit)
+
   }
 
   implicit class KRecordSeqSourceConverter[K, V](stream: Source[Seq[KRecord[K, V]], Any]) {
@@ -53,6 +60,12 @@ object KSource {
     def commitAsync(kafkaConsumerAgent: KafkaConsumerAgent[K, V],
                     callback: OffsetCommitCallback): Source[Seq[KRecord[K, V]], Any] =
       stream.mapAsync(1)(records => kafkaConsumerAgent.commitAsync(records, callback))
+
+    def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+      stream.mapAsync(1)(kafkaProducerAgent.produce)
+
+    def produceInTransaction(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+      stream.mapAsync(1)(kafkaProducerAgent.produceAndCommit)
 
   }
 
