@@ -4,46 +4,45 @@ import java.util
 
 import akka.actor.Props
 import akka.pattern.ask
-import com.github.simoexpo.ActorSystemSpec
+import com.github.simoexpo.as4k.DataHelperSpec
+import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito._
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-import org.scalatest.mockito.MockitoSugar
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
 import com.github.simoexpo.as4k.factory.KRecord
 
 import scala.collection.JavaConverters._
 
 class KafkaConsumerActorSpec
-    extends WordSpec
-    with Matchers
-    with MockitoSugar
+    extends BaseSpec
     with ScalaFutures
     with ActorSystemSpec
     with IntegrationPatience
-    with BeforeAndAfterEach {
+    with BeforeAndAfterEach
+    with DataHelperSpec {
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
 
-  private val PollingInterval = 200
+  private val PollingTimeout = 200
 
-  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingInterval) {
+  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingTimeout) {
     override protected val consumer = kafkaConsumer
   }))
 
   override def beforeEach(): Unit =
     reset(kafkaConsumer)
 
-  val topic = "topic"
-  val partition = 1
-
   "KafkaConsumerActor" when {
 
-    val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n")).toList
+    val topic = "topic"
+    val partition = 1
+
+    val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n", topic, partition)).toList
 
     "polling for new records" should {
 
@@ -53,7 +52,7 @@ class KafkaConsumerActorSpec
 
         val expectedKRecords = consumerRecords.iterator().asScala.map(KRecord(_)).toList
 
-        when(kafkaConsumer.poll(PollingInterval)).thenReturn(consumerRecords)
+        when(kafkaConsumer.poll(PollingTimeout)).thenReturn(consumerRecords)
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
@@ -64,7 +63,7 @@ class KafkaConsumerActorSpec
 
       "fail with a KafkaPollingException if the kafka consumer fails" in {
 
-        when(kafkaConsumer.poll(PollingInterval)).thenThrow(new RuntimeException("something bad happened!"))
+        when(kafkaConsumer.poll(PollingTimeout)).thenThrow(new RuntimeException("something bad happened!"))
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
@@ -150,12 +149,4 @@ class KafkaConsumerActorSpec
     }
   }
 
-  private def committableMetadata[K, V](record: KRecord[K, V]) = {
-    val topicPartition = new TopicPartition(record.topic, record.partition)
-    val offsetAndMetadata = new OffsetAndMetadata(record.offset + 1)
-    Map(topicPartition -> offsetAndMetadata).asJava
-  }
-
-  private def aConsumerRecord[K, V](offset: Long, key: K, value: V) =
-    new ConsumerRecord(topic, partition, offset, key, value)
 }

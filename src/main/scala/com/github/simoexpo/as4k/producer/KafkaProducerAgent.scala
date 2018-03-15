@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.util.Timeout
 import akka.pattern.ask
 import com.github.simoexpo.as4k.factory.KRecord
-import com.github.simoexpo.as4k.producer.KafkaProducerActor.{ProduceRecords, ProduceRecordsInTransaction}
+import com.github.simoexpo.as4k.producer.KafkaProducerActor.{ProduceRecords, ProduceRecordsAndCommit}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -21,9 +21,9 @@ class KafkaProducerAgent[K, V](producerOption: KafkaProducerOption[K, V])(implic
     (actor ? ProduceRecords(records)).map(_ => records)
 
   def produceAndCommit(record: KRecord[K, V], consumerGroup: String): Future[KRecord[K, V]] =
-    (actor ? ProduceRecordsInTransaction(List(record), consumerGroup)).map(_ => record)
+    (actor ? ProduceRecordsAndCommit(List(record), consumerGroup)).map(_ => record)
 
   def produceAndCommit(records: Seq[KRecord[K, V]], consumerGroup: String): Future[Seq[KRecord[K, V]]] =
-    (actor ? ProduceRecordsInTransaction(records, consumerGroup)).map(_ => records)
+    (actor ? ProduceRecordsAndCommit(records, consumerGroup)).map(_ => records)
 
 }

@@ -1,5 +1,7 @@
 import Dependencies._
 
+parallelExecution in Test := false
+
 lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(

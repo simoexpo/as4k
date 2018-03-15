@@ -10,7 +10,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 
-private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption[K, V], pollingInterval: Long)
+private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long)
     extends Actor
     with ActorLogging {
 
@@ -18,7 +18,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 
   override def receive: Receive = {
     case ConsumerToken =>
-      Try(consumer.poll(pollingInterval).iterator().asScala.map(KRecord(_)).toList).map(sender() ! _).recover {
+      Try(consumer.poll(pollingTimeout).iterator().asScala.map(KRecord(_)).toList).map(sender() ! _).recover {
         case NonFatal(ex) => sender() ! akka.actor.Status.Failure(KafkaPollingException(ex))
       }
     case CommitOffsetSync(records) =>
@@ -58,7 +58,7 @@ private[as4k] object KafkaConsumerActor {
 
   case class KafkaCommitException(ex: Throwable) extends RuntimeException(s"Fail to poll new records: $ex")
 
-  def props[K, V](consumerOption: KafkaConsumerOption[K, V], pollingInterval: Long): Props =
-    Props(new KafkaConsumerActor(consumerOption, pollingInterval))
+  def props[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long): Props =
+    Props(new KafkaConsumerActor(consumerOption, pollingTimeout))
 
 }

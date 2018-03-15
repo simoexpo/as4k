@@ -2,7 +2,12 @@ package com.github.simoexpo.as4k.producer
 
 import akka.actor.{Actor, ActorLogging, Props}
 import com.github.simoexpo.as4k.factory.KRecord
-import com.github.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecords, ProduceRecordsInTransaction}
+import com.github.simoexpo.as4k.producer.KafkaProducerActor.{
+  InitProducer,
+  KafkaProduceException,
+  ProduceRecords,
+  ProduceRecordsAndCommit
+}
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.{Callback, KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -14,19 +19,22 @@ import scala.util.control.NonFatal
 private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption[K, V]) extends Actor with ActorLogging {
 
   implicit private val ec: ExecutionContext = context.dispatcher
-  protected val producer: KafkaProducer[K, V] = producerOption.createOne()
+  val producer: KafkaProducer[K, V] = producerOption.createOne()
   private val topic = producerOption.topic
 
-  producer.initTransactions()
+  self ! InitProducer
 
   override def receive: Receive = {
+    case InitProducer => producer.initTransactions()
     case ProduceRecords(records, callback) =>
-      Future.traverse(records.asInstanceOf[Seq[KRecord[K, V]]])(produce(callback)).map(_ => sender() ! ()).recover {
-        case NonFatal(ex) => sender() ! akka.actor.Status.Failure(KafkaProduceException(ex))
+      val originalSender = sender()
+      Future.traverse(records.asInstanceOf[Seq[KRecord[K, V]]])(produce(callback)).map(_ => originalSender ! ()).recover {
+        case NonFatal(ex) => originalSender ! akka.actor.Status.Failure(KafkaProduceException(ex))
       }
-    case ProduceRecordsInTransaction(records, consumerGroup, callback) =>
-      produceAndCommit(records.asInstanceOf[Seq[KRecord[K, V]]], consumerGroup, callback).map(_ => sender ! ()).recover {
-        case NonFatal(ex) => sender() ! akka.actor.Status.Failure(KafkaProduceException(ex))
+    case ProduceRecordsAndCommit(records, consumerGroup, callback) =>
+      val originalSender = sender()
+      produceAndCommit(records.asInstanceOf[Seq[KRecord[K, V]]], consumerGroup, callback).map(_ => originalSender ! ()).recover {
+        case NonFatal(ex) => originalSender ! akka.actor.Status.Failure(KafkaProduceException(ex))
       }
   }
 
@@ -41,7 +49,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
     Future {
       producer.beginTransaction()
       records.foreach { record =>
-        producer.sendOffsetsToTransaction(producibleMetadata(record), consumerGroup)
+        producer.sendOffsetsToTransaction(committableMetadata(record), consumerGroup)
         producer.send(new ProducerRecord(topic, record.key, record.value), callback.orNull)
       }
       producer.commitTransaction()
@@ -53,7 +61,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
         Future.failed(ex)
     }
 
-  private def producibleMetadata(record: KRecord[K, V]) = {
+  private def committableMetadata(record: KRecord[K, V]) = {
     val topicPartition = new TopicPartition(record.topic, record.partition)
     val offsetAndMetadata = new OffsetAndMetadata(record.offset + 1)
     Map(topicPartition -> offsetAndMetadata).asJava
@@ -63,12 +71,12 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
 
 private[as4k] object KafkaProducerActor {
 
-  case class ProduceRecordsInTransaction[K, V](records: Seq[KRecord[K, V]],
-                                               consumerGroup: String,
-                                               callback: Option[Callback] = None)
+  case class ProduceRecordsAndCommit[K, V](records: Seq[KRecord[K, V]], consumerGroup: String, callback: Option[Callback] = None)
   case class ProduceRecords[K, V](records: Seq[KRecord[K, V]], callback: Option[Callback] = None)
 
   case class KafkaProduceException(exception: Throwable) extends RuntimeException(s"Failed to produce records: $exception")
+
+  case object InitProducer
 
   def props[K, V](consumerOption: KafkaProducerOption[K, V]): Props =
     Props(new KafkaProducerActor(consumerOption))

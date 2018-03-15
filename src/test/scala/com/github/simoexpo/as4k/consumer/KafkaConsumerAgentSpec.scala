@@ -2,40 +2,39 @@ package com.github.simoexpo.as4k.consumer
 
 import akka.actor.ActorRef
 import akka.testkit.TestProbe
-import com.github.simoexpo.ActorSystemSpec
+import com.github.simoexpo.as4k.DataHelperSpec
+import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
 import com.github.simoexpo.as4k.factory.{CallbackFactory, KRecord}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
+import org.scalatest.BeforeAndAfterEach
 
 class KafkaConsumerAgentSpec
-    extends WordSpec
-    with Matchers
-    with MockitoSugar
+    extends BaseSpec
     with ScalaFutures
     with ActorSystemSpec
     with IntegrationPatience
-    with BeforeAndAfterEach {
+    with BeforeAndAfterEach
+    with DataHelperSpec {
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
 
   private val kafkaConsumerActor: TestProbe = TestProbe()
   private val kafkaConsumerActorRef: ActorRef = kafkaConsumerActor.ref
 
-  private val PollingInterval = 200
+  private val PollingTimeout = 200
 
   private val kafkaConsumerAgent: KafkaConsumerAgent[Int, String] =
-    new KafkaConsumerAgent(kafkaConsumerOption, PollingInterval)(system, timeout) {
+    new KafkaConsumerAgent(kafkaConsumerOption, PollingTimeout)(system, timeout) {
       override val actor: ActorRef = kafkaConsumerActorRef
     }
 
-  val topic = "topic"
-  val partition = 1
-
   "KafkaConsumerAgent" when {
+
+    val topic = "topic"
+    val partition = 1
 
     val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
 
@@ -153,6 +152,4 @@ class KafkaConsumerAgentSpec
     }
   }
 
-  private def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int) =
-    KRecord(key, value, topic, partition, offset, System.currentTimeMillis())
 }

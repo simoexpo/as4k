@@ -10,15 +10,14 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 
-class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollingInterval: Long)(
-    implicit actorSystem: ActorSystem,
-    timeout: Timeout) {
+class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long)(implicit actorSystem: ActorSystem,
+                                                                                                timeout: Timeout) {
 
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
   val consumerGroup: String = ""
 
-  protected val actor: ActorRef = actorSystem.actorOf(KafkaConsumerActor.props(consumerOption, pollingInterval))
+  protected val actor: ActorRef = actorSystem.actorOf(KafkaConsumerActor.props(consumerOption, pollingTimeout))
 
   def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =
     (actor ? token).map(_.asInstanceOf[List[KRecord[K, V]]])

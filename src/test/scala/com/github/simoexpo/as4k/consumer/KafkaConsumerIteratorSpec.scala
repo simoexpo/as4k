@@ -1,9 +1,9 @@
 package com.github.simoexpo.as4k.consumer
 
+import com.github.simoexpo.BaseSpec
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.ConsumerToken
-import org.scalatest.{Matchers, WordSpec}
 
-class KafkaConsumerIteratorSpec extends WordSpec with Matchers {
+class KafkaConsumerIteratorSpec extends BaseSpec {
 
   "KafkaConsumerIteratorSpec" should {
 
