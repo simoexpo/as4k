@@ -10,9 +10,9 @@ import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import com.github.simoexpo.as4k.KSource._
-import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.ConsumerToken
+import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{ConsumerToken, KafkaCommitException, KafkaPollingException}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
-import com.github.simoexpo.as4k.factory.{KRecord, CallbackFactory}
+import com.github.simoexpo.as4k.factory.{CallbackFactory, KRecord}
 import org.mockito.invocation.InvocationOnMock
 
 import scala.concurrent.Future
@@ -34,163 +34,279 @@ class KSourceSpec
   val topic = "topic"
   val partition = 1
 
-  "KSource" should {
+  "KSource" when {
 
     val records1 = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
     val records2 = Range(100, 200).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
     val records3 = Range(200, 220).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
 
-    "produce a Source from the records consumed by a kafka consumer" in {
+    "producing a source from kafka records" should {
 
-      val totalRecordsSize = Seq(records1, records2, records3).map(_.size).sum
-      val expectedRecords = Seq(records1, records2, records3).flatten
+      "ask kafka consumer for new records" in {
 
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken))
-        .thenReturn(Future.successful(records1))
-        .thenReturn(Future.successful(records2))
-        .thenReturn(Future.successful(records3))
+        val totalRecordsSize = Seq(records1, records2, records3).map(_.size).sum
+        val expectedRecords = Seq(records1, records2, records3).flatten
 
-      val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken))
+          .thenReturn(Future.successful(records1))
+          .thenReturn(Future.successful(records2))
+          .thenReturn(Future.successful(records3))
 
-      whenReady(recordsConsumed) { records =>
-        records.size shouldBe totalRecordsSize
-        records.toList shouldBe expectedRecords
+        val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
 
-        verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+        whenReady(recordsConsumed) { records =>
+          records.size shouldBe totalRecordsSize
+          records.toList shouldBe expectedRecords
 
+          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+
+        }
       }
-    }
 
-    "not end when doesn't receive records when asking the kafka consumer agent" in {
+      "not end when not receiving new records from kafka consumer agent" in {
 
-      val totalRecordsSize = Seq(records1, records2).map(_.size).sum
-      val expectedRecords = Seq(records1, records2).flatten
+        val totalRecordsSize = Seq(records1, records2).map(_.size).sum
+        val expectedRecords = Seq(records1, records2).flatten
 
-      val emptyRecords = List.empty[KRecord[Int, String]]
+        val emptyRecords = List.empty[KRecord[Int, String]]
 
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken))
-        .thenReturn(Future.successful(records1))
-        .thenReturn(Future.successful(emptyRecords))
-        .thenReturn(Future.successful(records2))
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken))
+          .thenReturn(Future.successful(records1))
+          .thenReturn(Future.successful(emptyRecords))
+          .thenReturn(Future.successful(records2))
 
-      val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
+        val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
 
-      whenReady(recordsConsumed) { records =>
-        records.size shouldBe totalRecordsSize
-        records.toList shouldBe expectedRecords
+        whenReady(recordsConsumed) { records =>
+          records.size shouldBe totalRecordsSize
+          records.toList shouldBe expectedRecords
 
-        verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
 
+        }
       }
-    }
 
-    "call synchronously commit on KafkaConsumerAgent for a single ConsumerRecord" in {
+      "retry to retrieve records if the kafka consumer agent fails" in {
 
-      val totalRecordsSize = records1.size
-      val expectedRecords = records1
+        val totalRecordsSize = Seq(records1, records2).map(_.size).sum
+        val expectedRecords = Seq(records1, records2).flatten
 
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
-      when(kafkaConsumerAgent.commit(any[KRecord[Int, String]])).thenAnswer((invocation: InvocationOnMock) => {
-        Future.successful(invocation.getArgument[ConsumerRecord[Int, String]](0))
-      })
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken))
+          .thenReturn(Future.failed(KafkaPollingException(new RuntimeException("Something bad happened!"))))
+          .thenReturn(Future.successful(records1))
+          .thenReturn(Future.successful(records2))
 
-      val recordConsumed =
-        KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).commit(kafkaConsumerAgent).runWith(Sink.seq)
+        val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
 
-      whenReady(recordConsumed) { _ =>
-        verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        expectedRecords.foreach { record =>
-          verify(kafkaConsumerAgent).commit(record)
+        whenReady(recordsConsumed) { records =>
+          records.size shouldBe totalRecordsSize
+          records.toList shouldBe expectedRecords
+
+          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+
         }
       }
     }
 
-    "call synchronously commit on KafkaConsumerAgent for a list of ConsumerRecord" in {
+    "committing synchronously records" should {
 
-      val totalRecordsSize = records1.size
-      val groupSize = 10
-      val expectedRecords = records1
+      "call commit on KafkaConsumerAgent for a single ConsumerRecord" in {
 
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
-      when(kafkaConsumerAgent.commit(any[Seq[KRecord[Int, String]]])).thenAnswer((invocation: InvocationOnMock) => {
-        Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
-      })
+        val totalRecordsSize = records1.size
+        val expectedRecords = records1
 
-      val recordConsumed =
-        KSource
-          .fromKafkaConsumer(kafkaConsumerAgent)
-          .take(totalRecordsSize)
-          .grouped(groupSize)
-          .commit(kafkaConsumerAgent)
-          .mapConcat(_.toList)
-          .runWith(Sink.seq)
-
-      whenReady(recordConsumed) { _ =>
-        verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        expectedRecords.grouped(10).foreach { recordsGroup =>
-          verify(kafkaConsumerAgent).commit(recordsGroup)
-        }
-      }
-    }
-
-    val callback = CallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
-      exception match {
-        case None     => println(s"successfully commit offset $offset")
-        case Some(ex) => throw ex
-      }
-    }
-
-    "call asynchronously commit on KafkaConsumerAgent for a single ConsumerRecord" in {
-
-      val totalRecordsSize = records1.size
-      val expectedRecords = records1
-
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
-      when(kafkaConsumerAgent.commitAsync(any[KRecord[Int, String]], mockitoEq(callback)))
-        .thenAnswer((invocation: InvocationOnMock) => {
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commit(any[KRecord[Int, String]])).thenAnswer((invocation: InvocationOnMock) => {
           Future.successful(invocation.getArgument[ConsumerRecord[Int, String]](0))
         })
 
-      val recordConsumed =
-        KSource
-          .fromKafkaConsumer(kafkaConsumerAgent)
-          .take(totalRecordsSize)
-          .commitAsync(kafkaConsumerAgent, callback)
-          .runWith(Sink.seq)
+        val recordConsumed =
+          KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).commit(kafkaConsumerAgent).runWith(Sink.seq)
 
-      whenReady(recordConsumed) { _ =>
-        verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        expectedRecords.foreach { record =>
-          verify(kafkaConsumerAgent).commitAsync(record, callback)
+        whenReady(recordConsumed) { _ =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          expectedRecords.foreach { record =>
+            verify(kafkaConsumerAgent).commit(record)
+          }
+        }
+      }
+
+      "call commit on KafkaConsumerAgent for a list of ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+        val groupSize = 10
+        val expectedRecords = records1
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commit(any[Seq[KRecord[Int, String]]])).thenAnswer((invocation: InvocationOnMock) => {
+          Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
+        })
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .grouped(groupSize)
+            .commit(kafkaConsumerAgent)
+            .mapConcat(_.toList)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed) { _ =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          expectedRecords.grouped(10).foreach { recordsGroup =>
+            verify(kafkaConsumerAgent).commit(recordsGroup)
+          }
+        }
+      }
+
+      "fail if kafka consumer fail to commit for a single ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commit(any[KRecord[Int, String]]))
+          .thenReturn(Future.failed(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        val recordConsumed =
+          KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).commit(kafkaConsumerAgent).runWith(Sink.seq)
+
+        whenReady(recordConsumed.failed) { exception =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          exception shouldBe a[KafkaCommitException]
+        }
+      }
+
+      "fail if kafka consumer fail to commit for a list of ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+        val groupSize = 10
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commit(any[Seq[KRecord[Int, String]]]))
+          .thenReturn(Future.failed(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .grouped(groupSize)
+            .commit(kafkaConsumerAgent)
+            .mapConcat(_.toList)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed.failed) { exception =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          exception shouldBe a[KafkaCommitException]
         }
       }
     }
 
-    "call asynchronously commit on KafkaConsumerAgent for a list of ConsumerRecord" in {
+    "committing asynchronously records" should {
 
-      val totalRecordsSize = records1.size
-      val groupSize = 10
-      val expectedRecords = records1
+      val callback = CallbackFactory { (offset: Map[TopicPartition, OffsetAndMetadata], exception: Option[Exception]) =>
+        exception match {
+          case None     => println(s"successfully commit offset $offset")
+          case Some(ex) => throw ex
+        }
+      }
 
-      when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
-      when(kafkaConsumerAgent.commitAsync(any[Seq[KRecord[Int, String]]], mockitoEq(callback)))
-        .thenAnswer((invocation: InvocationOnMock) => {
-          Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
-        })
+      "call commit on KafkaConsumerAgent for a single ConsumerRecord" in {
 
-      val recordConsumed =
-        KSource
-          .fromKafkaConsumer(kafkaConsumerAgent)
-          .take(totalRecordsSize)
-          .grouped(groupSize)
-          .commitAsync(kafkaConsumerAgent, callback)
-          .mapConcat(_.toList)
-          .runWith(Sink.seq)
+        val totalRecordsSize = records1.size
+        val expectedRecords = records1
 
-      whenReady(recordConsumed) { _ =>
-        verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
-        expectedRecords.grouped(10).foreach { recordsGroup =>
-          verify(kafkaConsumerAgent).commitAsync(recordsGroup, callback)
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commitAsync(any[KRecord[Int, String]], mockitoEq(callback)))
+          .thenAnswer((invocation: InvocationOnMock) => {
+            Future.successful(invocation.getArgument[ConsumerRecord[Int, String]](0))
+          })
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .commitAsync(kafkaConsumerAgent, callback)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed) { _ =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          expectedRecords.foreach { record =>
+            verify(kafkaConsumerAgent).commitAsync(record, callback)
+          }
+        }
+      }
+
+      "call commit on KafkaConsumerAgent for a list of ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+        val groupSize = 10
+        val expectedRecords = records1
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commitAsync(any[Seq[KRecord[Int, String]]], mockitoEq(callback)))
+          .thenAnswer((invocation: InvocationOnMock) => {
+            Future.successful(invocation.getArgument[Seq[ConsumerRecord[Int, String]]](0))
+          })
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .grouped(groupSize)
+            .commitAsync(kafkaConsumerAgent, callback)
+            .mapConcat(_.toList)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed) { _ =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          expectedRecords.grouped(10).foreach { recordsGroup =>
+            verify(kafkaConsumerAgent).commitAsync(recordsGroup, callback)
+          }
+        }
+      }
+
+      "fail if kafka consumer fail to commit for a single ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commitAsync(any[KRecord[Int, String]], mockitoEq(callback)))
+          .thenReturn(Future.failed(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .commitAsync(kafkaConsumerAgent, callback)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed.failed) { exception =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          exception shouldBe a[KafkaCommitException]
+        }
+      }
+
+      "fail if kafka consumer fail to commit for a list of ConsumerRecord" in {
+
+        val totalRecordsSize = records1.size
+        val groupSize = 10
+
+        when(kafkaConsumerAgent.askForRecords(ConsumerToken)).thenReturn(Future.successful(records1))
+        when(kafkaConsumerAgent.commitAsync(any[Seq[KRecord[Int, String]]], mockitoEq(callback)))
+          .thenReturn(Future.failed(KafkaCommitException(new RuntimeException("Something bad happened!"))))
+
+        val recordConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent)
+            .take(totalRecordsSize)
+            .grouped(groupSize)
+            .commitAsync(kafkaConsumerAgent, callback)
+            .mapConcat(_.toList)
+            .runWith(Sink.seq)
+
+        whenReady(recordConsumed.failed) { exception =>
+          verify(kafkaConsumerAgent, atLeastOnce()).askForRecords(ConsumerToken)
+          exception shouldBe a[KafkaCommitException]
         }
       }
     }
