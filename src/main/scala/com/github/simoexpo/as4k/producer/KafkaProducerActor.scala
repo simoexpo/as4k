@@ -24,8 +24,8 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
       Future.traverse(records.asInstanceOf[Seq[KRecord[K, V]]])(produce(callback)).map(_ => sender() ! ()).recover {
         case NonFatal(ex) => sender() ! akka.actor.Status.Failure(KafkaProduceException(ex))
       }
-    case ProduceRecordsInTransaction(records, callback) =>
-      produceAndCommit(records.asInstanceOf[Seq[KRecord[K, V]]], callback).map(_ => sender ! ()).recover {
+    case ProduceRecordsInTransaction(records, consumerGroup, callback) =>
+      produceAndCommit(records.asInstanceOf[Seq[KRecord[K, V]]], consumerGroup, callback).map(_ => sender ! ()).recover {
         case NonFatal(ex) => sender() ! akka.actor.Status.Failure(KafkaProduceException(ex))
       }
   }
@@ -37,11 +37,11 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
         Future.failed(ex)
     }
 
-  private def produceAndCommit(records: Seq[KRecord[K, V]], callback: Option[Callback]): Future[Unit] =
+  private def produceAndCommit(records: Seq[KRecord[K, V]], consumerGroup: String, callback: Option[Callback]): Future[Unit] =
     Future {
       producer.beginTransaction()
       records.foreach { record =>
-        producer.sendOffsetsToTransaction(producibleMetadata(record), "consumerGroup")
+        producer.sendOffsetsToTransaction(producibleMetadata(record), consumerGroup)
         producer.send(new ProducerRecord(topic, record.key, record.value), callback.orNull)
       }
       producer.commitTransaction()
@@ -63,7 +63,9 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
 
 private[as4k] object KafkaProducerActor {
 
-  case class ProduceRecordsInTransaction[K, V](records: Seq[KRecord[K, V]], callback: Option[Callback] = None)
+  case class ProduceRecordsInTransaction[K, V](records: Seq[KRecord[K, V]],
+                                               consumerGroup: String,
+                                               callback: Option[Callback] = None)
   case class ProduceRecords[K, V](records: Seq[KRecord[K, V]], callback: Option[Callback] = None)
 
   case class KafkaProduceException(exception: Throwable) extends RuntimeException(s"Failed to produce records: $exception")

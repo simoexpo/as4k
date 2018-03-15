@@ -16,6 +16,8 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
 
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
+  val consumerGroup: String = ""
+
   protected val actor: ActorRef = actorSystem.actorOf(KafkaConsumerActor.props(consumerOption, pollingInterval))
 
   def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =

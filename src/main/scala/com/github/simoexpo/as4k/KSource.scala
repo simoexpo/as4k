@@ -17,13 +17,16 @@ object KSource {
   lazy val RandomFactor: Double = 0.2
   lazy val MaxRestart: Int = 2
 
-  def fromKafkaConsumer[K, V](kafkaConsumerAgent: KafkaConsumerAgent[K, V])(
-      implicit ec: ExecutionContext): Source[KRecord[K, V], Any] =
+  def fromKafkaConsumer[K, V](kafkaConsumerAgent: KafkaConsumerAgent[K, V],
+                              minBackoff: Option[FiniteDuration] = None,
+                              maxBackoff: Option[FiniteDuration] = None,
+                              randomFactor: Option[Double] = None,
+                              maxRestart: Option[Int] = None)(implicit ec: ExecutionContext): Source[KRecord[K, V], Any] =
     RestartSource.withBackoff(
-      minBackoff = MinBackoff,
-      maxBackoff = MaxBackoff,
-      randomFactor = RandomFactor,
-      maxRestarts = MaxRestart
+      minBackoff = minBackoff.getOrElse(MinBackoff),
+      maxBackoff = maxBackoff.getOrElse(MaxBackoff),
+      randomFactor = randomFactor.getOrElse(RandomFactor),
+      maxRestarts = maxRestart.getOrElse(MaxRestart)
     ) { () =>
       Source
         .fromIterator(KafkaConsumerIterator.getKafkaIterator)
@@ -47,8 +50,9 @@ object KSource {
     def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[KRecord[K, V], Any] =
       stream.mapAsync(1)(kafkaProducerAgent.produce)
 
-    def produceInTransaction(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[KRecord[K, V], Any] =
-      stream.mapAsync(1)(kafkaProducerAgent.produceAndCommit)
+    def produceAndCommit(kafkaProducerAgent: KafkaProducerAgent[K, V],
+                         kafkaConsumerAgent: KafkaConsumerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record, kafkaConsumerAgent.consumerGroup))
 
   }
 
@@ -64,8 +68,9 @@ object KSource {
     def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
       stream.mapAsync(1)(kafkaProducerAgent.produce)
 
-    def produceInTransaction(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
-      stream.mapAsync(1)(kafkaProducerAgent.produceAndCommit)
+    def produceAndCommit(kafkaProducerAgent: KafkaProducerAgent[K, V],
+                         kafkaConsumerAgent: KafkaConsumerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+      stream.mapAsync(1)(records => kafkaProducerAgent.produceAndCommit(records, kafkaConsumerAgent.consumerGroup))
 
   }
 

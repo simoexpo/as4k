@@ -2,20 +2,21 @@ package com.github.simoexpo.as4k
 
 import akka.stream.scaladsl.Sink
 import com.github.simoexpo.ActorSystemSpec
-import org.apache.kafka.clients.consumer._
-import org.apache.kafka.common.TopicPartition
-import org.mockito.Mockito.{atLeast => invokedAtLeast, _}
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
-import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-import org.scalatest.mockito.MockitoSugar
-import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import com.github.simoexpo.as4k.KSource._
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{ConsumerToken, KafkaCommitException, KafkaPollingException}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
 import com.github.simoexpo.as4k.factory.{CallbackFactory, KRecord}
+import org.apache.kafka.clients.consumer._
+import org.apache.kafka.common.TopicPartition
+import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
+import org.mockito.Mockito.{atLeast => invokedAtLeast, _}
 import org.mockito.invocation.InvocationOnMock
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 class KSourceSpec
     extends WordSpec
@@ -47,12 +48,17 @@ class KSourceSpec
         val totalRecordsSize = Seq(records1, records2, records3).map(_.size).sum
         val expectedRecords = Seq(records1, records2, records3).flatten
 
+        val minBackoff = Some(1.second)
+        val maxBackoff = Some(1.second)
+        val randomFactor = Some(0D)
+
         when(kafkaConsumerAgent.askForRecords(ConsumerToken))
           .thenReturn(Future.successful(records1))
           .thenReturn(Future.successful(records2))
           .thenReturn(Future.successful(records3))
 
-        val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
+        val recordsConsumed =
+          KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
 
         whenReady(recordsConsumed) { records =>
           records.size shouldBe totalRecordsSize
@@ -91,12 +97,19 @@ class KSourceSpec
         val totalRecordsSize = Seq(records1, records2).map(_.size).sum
         val expectedRecords = Seq(records1, records2).flatten
 
+        val minBackoff = Some(0.second)
+        val randomFactor = Some(0D)
+
         when(kafkaConsumerAgent.askForRecords(ConsumerToken))
           .thenReturn(Future.failed(KafkaPollingException(new RuntimeException("Something bad happened!"))))
           .thenReturn(Future.successful(records1))
           .thenReturn(Future.successful(records2))
 
-        val recordsConsumed = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(totalRecordsSize).runWith(Sink.seq)
+        val recordsConsumed =
+          KSource
+            .fromKafkaConsumer(kafkaConsumerAgent, minBackoff = minBackoff, randomFactor = randomFactor)
+            .take(totalRecordsSize)
+            .runWith(Sink.seq)
 
         whenReady(recordsConsumed) { records =>
           records.size shouldBe totalRecordsSize
