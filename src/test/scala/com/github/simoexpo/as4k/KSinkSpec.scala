@@ -60,6 +60,8 @@ class KSinkSpec
         }
       }
 
+      "fail" in {}
+
     }
 
     "produce and commit in transaction record on a topic" should {
@@ -98,6 +100,8 @@ class KSinkSpec
           verify(kafkaConsumerAgent).consumerGroup
         }
       }
+
+      "fail" in {}
 
     }
 

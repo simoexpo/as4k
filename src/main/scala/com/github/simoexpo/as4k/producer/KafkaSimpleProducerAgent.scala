@@ -8,11 +8,14 @@ import com.github.simoexpo.as4k.producer.KafkaProducerActor.{ProduceRecords, Pro
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class KafkaProducerAgent[K, V](producerOption: KafkaProducerOption[K, V])(implicit actorSystem: ActorSystem, timeout: Timeout) {
+class KafkaProducerAgent[K, V, T <: KafkaProducerActor[K, V]](producerOption: KafkaProducerOption[K, V])(
+    implicit actorSystem: ActorSystem,
+    timeout: Timeout) {
 
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
-  protected val actor: ActorRef = actorSystem.actorOf(KafkaProducerActor.props(producerOption))
+  protected val actor: ActorRef =
+    actorSystem.actorOf(T.props(producerOption))
 
   def produce(record: KRecord[K, V]): Future[KRecord[K, V]] =
     (actor ? ProduceRecords(List(record))).map(_ => record)

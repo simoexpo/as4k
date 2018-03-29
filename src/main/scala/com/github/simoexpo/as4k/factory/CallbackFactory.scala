@@ -11,7 +11,9 @@ import scala.language.implicitConversions
 
 object CallbackFactory {
 
-  def apply(callback: (Map[TopicPartition, OffsetAndMetadata], Option[Exception]) => Unit): OffsetCommitCallback =
+  type CustomCommitCallback = (Map[TopicPartition, OffsetAndMetadata], Option[Exception]) => Unit
+
+  def apply(callback: CustomCommitCallback): OffsetCommitCallback =
     new OffsetCommitCallback {
       override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit =
         callback(offsets.asScala.toMap, Option(exception))
