@@ -4,8 +4,8 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsets, ConsumerToken}
-import com.github.simoexpo.as4k.factory.CallbackFactory.CustomCommitCallback
-import com.github.simoexpo.as4k.factory.KRecord
+import com.github.simoexpo.as4k.model.CustomCallback.CustomCommitCallback
+import com.github.simoexpo.as4k.model.KRecord
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions

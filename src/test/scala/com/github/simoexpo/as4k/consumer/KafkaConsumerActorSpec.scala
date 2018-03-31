@@ -1,26 +1,23 @@
 package com.github.simoexpo.as4k.consumer
 
-import akka.actor.{Actor, Props}
+import java.util.{Map => JavaMap}
+
+import akka.Done
+import akka.actor.Props
 import akka.pattern.ask
 import akka.testkit.TestActors
-import com.github.simoexpo.as4k.DataHelperSpec
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
-import com.github.simoexpo.as4k.factory.KRecord
+import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.model.KRecord
 import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
 import org.mockito.Mockito.{atLeast => invokedAtLeast, _}
-import org.scalatest.concurrent.Eventually._
-import org.scalatest.BeforeAndAfterEach
-import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-
-import scala.concurrent.duration._
-import java.util.{Map => JavaMap}
-
-import akka.Done
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future

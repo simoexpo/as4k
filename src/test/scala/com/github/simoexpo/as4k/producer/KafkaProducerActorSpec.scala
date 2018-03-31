@@ -2,17 +2,26 @@ package com.github.simoexpo.as4k.producer
 
 import akka.actor.Props
 import akka.pattern.ask
-import com.github.simoexpo.as4k.DataHelperSpec
-import com.github.simoexpo.as4k.factory.KRecord
-import com.github.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecords, ProduceRecordsAndCommit}
+import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.model.KRecord
+import com.github.simoexpo.as4k.producer.KafkaProducerActor.{
+  KafkaProduceException,
+  ProduceRecord,
+  ProduceRecords,
+  ProduceRecordsAndCommit
+}
 import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{Callback, KafkaProducer, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatcher
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.{any, argThat, isNull}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 
+import scala.concurrent.Future
 import scala.language.postfixOps
 
 class KafkaProducerActorSpec
@@ -32,9 +41,9 @@ class KafkaProducerActorSpec
   private val kafkaProducerActor = system.actorOf(Props(new KafkaProducerActor(kafkaProducerOption)))
 
   override def beforeEach(): Unit =
-    reset(kafkaProducer)
+    reset(kafkaProducer, kafkaProducerOption)
 
-  "KafkaProducerActor" should {
+  "KafkaProducerActor" when {
 
     val topic = "topic"
     val partition = 1
@@ -43,23 +52,68 @@ class KafkaProducerActorSpec
 
     "producing records" should {
 
-      "send the records to the producer" in {
+      "send a single record to the producer" in {
 
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
+        when(kafkaProducerOption.isTransactional).thenReturn(false)
 
-        whenReady(kafkaProducerActor ? ProduceRecords(kRecords)) { _ =>
-          kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
-          }
+        doAnswer(new Answer[Unit]() {
+          override def answer(invocation: InvocationOnMock) =
+            Future {
+              val recordMetadata =
+                new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L.asInstanceOf[java.lang.Long], 1, 1)
+              invocation.getArgument[Callback](1).onCompletion(recordMetadata, null)
+            }
+        }).when(kafkaProducer).send(any[ProducerRecord[Int, String]], any[Callback])
+
+        whenReady(kafkaProducerActor ? ProduceRecord(kRecords.head)) { _ =>
+          verify(kafkaProducer).send(anyProducerRecordWith(kRecords.head), any[Callback])
         }
       }
 
-      "fail with a KafkaProduceException if the producer fail" in {
+      "send a sequence of records to the producer in transaction" in {
 
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aFailedRecordMetadataFuture)
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
+
+        whenReady(kafkaProducerActor ? ProduceRecords(kRecords)) { _ =>
+          verify(kafkaProducer).beginTransaction()
+          kRecords.foreach { record =>
+            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+          }
+          verify(kafkaProducer).commitTransaction()
+        }
+      }
+
+      "fail with a KafkaProduceException if the producer fail to send a single record" in {
+
+        doAnswer(new Answer[Unit]() {
+          override def answer(invocation: InvocationOnMock) =
+            Future {
+              val recordMetadata =
+                new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L.asInstanceOf[java.lang.Long], 1, 1)
+              val exception = new RuntimeException("something bad happened!")
+              invocation.getArgument[Callback](1).onCompletion(recordMetadata, exception)
+            }
+        }).when(kafkaProducer).send(any[ProducerRecord[Int, String]], any[Callback])
+
+        whenReady(kafkaProducerActor ? ProduceRecord(kRecords.head) failed) { exception =>
+          exception shouldBe a[KafkaProduceException]
+        }
+      }
+
+      "fail with a KafkaProduceException if the producer fail to send a sequence of record in transaction" in {
+
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
+
+        when(kafkaProducer.commitTransaction()).thenThrow(new RuntimeException("something bad heppened!"))
 
         whenReady(kafkaProducerActor ? ProduceRecords(kRecords) failed) { exception =>
           exception shouldBe a[KafkaProduceException]
+          verify(kafkaProducer).beginTransaction()
+          kRecords.foreach { record =>
+            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+          }
+          verify(kafkaProducer).commitTransaction()
+          verify(kafkaProducer).abortTransaction()
         }
       }
 
@@ -68,6 +122,8 @@ class KafkaProducerActorSpec
     "producing and committing records in transaction" should {
 
       "send the records to the producer and mark them as consumed" in {
+
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
 
         val consumerGroup = "consumerGroup"
 
@@ -85,6 +141,8 @@ class KafkaProducerActorSpec
       }
 
       "fail with a KafkaProduceException if the producer fail and abort transaction" in {
+
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
 
         val consumerGroup = "consumerGroup"
 
@@ -106,6 +164,8 @@ class KafkaProducerActorSpec
       }
 
       "fail with a KafkaProduceException if the commit fail and abort transaction" in {
+
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
 
         val consumerGroup = "consumerGroup"
         val failedRecordIndex = 20

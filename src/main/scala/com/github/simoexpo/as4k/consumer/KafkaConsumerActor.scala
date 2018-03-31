@@ -6,8 +6,8 @@ import java.util.concurrent.TimeUnit
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash, Status}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
-import com.github.simoexpo.as4k.factory.CallbackFactory.CustomCommitCallback
-import com.github.simoexpo.as4k.factory.KRecord
+import com.github.simoexpo.as4k.model.CustomCallback.CustomCommitCallback
+import com.github.simoexpo.as4k.model.KRecord
 import org.apache.kafka.clients.consumer.{KafkaConsumer, OffsetAndMetadata, OffsetCommitCallback}
 import org.apache.kafka.common.TopicPartition
 

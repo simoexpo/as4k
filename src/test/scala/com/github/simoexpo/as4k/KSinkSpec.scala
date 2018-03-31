@@ -2,11 +2,12 @@ package com.github.simoexpo.as4k
 
 import akka.stream.scaladsl.Source
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
-import com.github.simoexpo.as4k.producer.KafkaProducerAgent
+import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
+import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-import org.mockito.Mockito._
 
 import scala.concurrent.Future
 
@@ -19,10 +20,12 @@ class KSinkSpec
     with DataHelperSpec {
 
   private val kafkaConsumerAgent: KafkaConsumerAgent[Int, String] = mock[KafkaConsumerAgent[Int, String]]
-  private val kafkaProducerAgent: KafkaProducerAgent[Int, String] = mock[KafkaProducerAgent[Int, String]]
+  private val kafkaSimpleProducerAgent: KafkaSimpleProducerAgent[Int, String] = mock[KafkaSimpleProducerAgent[Int, String]]
+  private val kafkaTransactionalProducerAgent: KafkaTransactionalProducerAgent[Int, String] =
+    mock[KafkaTransactionalProducerAgent[Int, String]]
 
   override def beforeEach(): Unit =
-    reset(kafkaConsumerAgent, kafkaProducerAgent)
+    reset(kafkaConsumerAgent, kafkaSimpleProducerAgent, kafkaTransactionalProducerAgent)
 
   "KSink" when {
 
@@ -33,30 +36,30 @@ class KSinkSpec
 
     "producing records on a topic" should {
 
-      "produce single KRecord" in {
+      "allow to produce single KRecord with a KafkaSimpleProducerAgent" in {
 
         kRecords.foreach { record =>
-          when(kafkaProducerAgent.produce(record)).thenReturn(Future.successful(record))
+          when(kafkaSimpleProducerAgent.produce(record)).thenReturn(Future.successful(record))
         }
 
-        val result = Source.fromIterator(() => kRecords.iterator).runWith(KSink.produce(kafkaProducerAgent))
+        val result = Source.fromIterator(() => kRecords.iterator).runWith(KSink.produce(kafkaSimpleProducerAgent))
 
         whenReady(result) { _ =>
           kRecords.foreach { record =>
-            verify(kafkaProducerAgent).produce(record)
+            verify(kafkaSimpleProducerAgent).produce(record)
           }
         }
 
       }
 
-      "produce a list of KRecord" in {
+      "allow to produce a list of KRecord in transaction with a KafkaTransactionalProducerAgent" in {
 
-        when(kafkaProducerAgent.produce(kRecords)).thenReturn(Future.successful(kRecords))
+        when(kafkaTransactionalProducerAgent.produce(kRecords)).thenReturn(Future.successful(kRecords))
 
-        val result = Source.single(kRecords).runWith(KSink.produceSequence(kafkaProducerAgent))
+        val result = Source.single(kRecords).runWith(KSink.produceSequence(kafkaTransactionalProducerAgent))
 
         whenReady(result) { _ =>
-          verify(kafkaProducerAgent).produce(kRecords)
+          verify(kafkaTransactionalProducerAgent).produce(kRecords)
         }
       }
 
@@ -64,39 +67,42 @@ class KSinkSpec
 
     }
 
-    "produce and commit in transaction record on a topic" should {
+    "producing and committing in transaction record on a topic" should {
 
       val consumerGroup = kafkaConsumerAgent.consumerGroup
 
-      "produce and commit in transaction a single KRecord" in {
+      "allow to produce and commit in transaction a single KRecord with a KafkaTransactionalProducerAgent" in {
 
         kRecords.foreach { record =>
-          when(kafkaProducerAgent.produceAndCommit(record, consumerGroup)).thenReturn(Future.successful(record))
+          when(kafkaTransactionalProducerAgent.produceAndCommit(record, consumerGroup)).thenReturn(Future.successful(record))
         }
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
         val result =
-          Source.fromIterator(() => kRecords.iterator).runWith(KSink.produceAndCommit(kafkaProducerAgent, kafkaConsumerAgent))
+          Source
+            .fromIterator(() => kRecords.iterator)
+            .runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
 
         whenReady(result) { _ =>
           kRecords.foreach { record =>
-            verify(kafkaProducerAgent).produceAndCommit(record, consumerGroup)
+            verify(kafkaTransactionalProducerAgent).produceAndCommit(record, consumerGroup)
           }
           verify(kafkaConsumerAgent, times(kRecords.size)).consumerGroup
         }
       }
 
-      "produce and commit in transaction a list of KRecord" in {
+      "allow to produce and commit in transaction a list of KRecord with a KafkaTransactionalProducerAgent" in {
 
-        when(kafkaProducerAgent.produceAndCommit(kRecords, consumerGroup)).thenReturn(Future.successful(kRecords))
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords, consumerGroup)).thenReturn(Future.successful(kRecords))
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
-        val result = Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent, kafkaConsumerAgent))
+        val result =
+          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
 
         whenReady(result) { _ =>
-          verify(kafkaProducerAgent).produceAndCommit(kRecords, consumerGroup)
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords, consumerGroup)
           verify(kafkaConsumerAgent).consumerGroup
         }
       }

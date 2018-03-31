@@ -1,8 +1,8 @@
-package com.github.simoexpo.as4k
+package com.github.simoexpo.as4k.helper
 
 import java.util.concurrent.{Future => JavaFuture, TimeUnit => JavaTimeUnit}
 
-import com.github.simoexpo.as4k.factory.KRecord
+import com.github.simoexpo.as4k.model.KRecord
 import org.apache.kafka.clients.consumer.{ConsumerRecord, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition

@@ -2,7 +2,7 @@ package com.github.simoexpo.as4k.producer
 
 import akka.actor.ActorRef
 import akka.testkit.TestProbe
-import com.github.simoexpo.as4k.DataHelperSpec
+import com.github.simoexpo.as4k.helper.DataHelperSpec
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecords, ProduceRecordsAndCommit}
 import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -10,7 +10,7 @@ import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 
-class KafkaProducerAgentSpec
+class KafkaTransactionalProducerAgentSpec
     extends BaseSpec
     with ScalaFutures
     with ActorSystemSpec
@@ -22,12 +22,13 @@ class KafkaProducerAgentSpec
 
   when(kafkaProducerOption.topic).thenReturn("producerTopic")
   when(kafkaProducerOption.createOne()).thenReturn(mock[KafkaProducer[Int, String]])
+  when(kafkaProducerOption.isTransactional).thenReturn(true)
 
   private val kafkaProducerActor: TestProbe = TestProbe()
   private val kafkaProducerActorRef: ActorRef = kafkaProducerActor.ref
 
-  private val kafkaProducerAgent: KafkaProducerAgent[Int, String] =
-    new KafkaProducerAgent(kafkaProducerOption)(system, timeout) {
+  private val kafkaProducerAgent: KafkaTransactionalProducerAgent[Int, String] =
+    new KafkaTransactionalProducerAgent(kafkaProducerOption)(system, timeout) {
       override protected val actor: ActorRef = kafkaProducerActorRef
     }
 
@@ -40,22 +41,7 @@ class KafkaProducerAgentSpec
 
     "producing records" should {
 
-      "produce a single record" in {
-
-        val oneRecord = kRecords.head
-
-        val produceResult = kafkaProducerAgent.produce(oneRecord)
-
-        kafkaProducerActor.expectMsg(ProduceRecords(List(oneRecord)))
-        kafkaProducerActor.reply(())
-
-        whenReady(produceResult) { record =>
-          record shouldBe oneRecord
-        }
-
-      }
-
-      "produce a list of records" in {
+      "produce a list of records in transaction" in {
 
         val produceResult = kafkaProducerAgent.produce(kRecords)
 

@@ -1,4 +1,4 @@
-package com.github.simoexpo.as4k.factory
+package com.github.simoexpo.as4k.model
 
 import org.apache.kafka.clients.consumer.ConsumerRecord
 

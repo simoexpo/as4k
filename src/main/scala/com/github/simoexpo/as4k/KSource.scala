@@ -1,14 +1,12 @@
 package com.github.simoexpo.as4k
 
-import akka.stream.scaladsl.{RestartSource, Source}
+import akka.stream.scaladsl.Source
 import com.github.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerIterator}
-import com.github.simoexpo.as4k.factory.CallbackFactory.CustomCommitCallback
-import com.github.simoexpo.as4k.factory.KRecord
-import com.github.simoexpo.as4k.producer.KafkaProducerAgent
-import org.apache.kafka.clients.consumer._
+import com.github.simoexpo.as4k.model.CustomCallback.CustomCommitCallback
+import com.github.simoexpo.as4k.model.KRecord
+import com.github.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 import scala.language.implicitConversions
 
 object KSource {
@@ -31,10 +29,10 @@ object KSource {
     def mapValue[Out](fun: V => Out): Source[KRecord[K, Out], Any] =
       stream.map(_.mapValue(fun))
 
-    def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[KRecord[K, V], Any] =
-      stream.mapAsync(1)(kafkaProducerAgent.produce)
+    def produce(parallelism: Int = 1)(kafkaProducerAgent: KafkaSimpleProducerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(parallelism)(kafkaProducerAgent.produce)
 
-    def produceAndCommit(kafkaProducerAgent: KafkaProducerAgent[K, V],
+    def produceAndCommit(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V],
                          kafkaConsumerAgent: KafkaConsumerAgent[K, V]): Source[KRecord[K, V], Any] =
       stream.mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record, kafkaConsumerAgent.consumerGroup))
 
@@ -48,10 +46,10 @@ object KSource {
         kafkaConsumerAgent.commitBatch(records, customCallback)
       }
 
-    def produce(kafkaProducerAgent: KafkaProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+    def produce(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
       stream.mapAsync(1)(kafkaProducerAgent.produce)
 
-    def produceAndCommit(kafkaProducerAgent: KafkaProducerAgent[K, V],
+    def produceAndCommit(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V],
                          kafkaConsumerAgent: KafkaConsumerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
       stream.mapAsync(1)(records => kafkaProducerAgent.produceAndCommit(records, kafkaConsumerAgent.consumerGroup))
 
