@@ -3,6 +3,7 @@ package com.github.simoexpo.as4k
 import akka.stream.scaladsl.Source
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
 import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.producer.KafkaProducerActor.KafkaProduceException
 import com.github.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.mockito.Mockito._
@@ -52,7 +53,7 @@ class KSinkSpec
 
       }
 
-      "allow to produce a list of KRecord in transaction with a KafkaTransactionalProducerAgent" in {
+      "allow to produce a sequence of KRecord in transaction with a KafkaTransactionalProducerAgent" in {
 
         when(kafkaTransactionalProducerAgent.produce(kRecords)).thenReturn(Future.successful(kRecords))
 
@@ -63,7 +64,31 @@ class KSinkSpec
         }
       }
 
-      "fail" in {}
+      "fail with a KafkaProduceException if fail to produce a single record" in {
+
+        when(kafkaSimpleProducerAgent.produce(kRecords.head))
+          .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
+
+        val result = Source.fromIterator(() => kRecords.iterator).runWith(KSink.produce(kafkaSimpleProducerAgent))
+
+        whenReady(result.failed) { ex =>
+          verify(kafkaSimpleProducerAgent).produce(kRecords.head)
+          ex shouldBe a[KafkaProduceException]
+        }
+      }
+
+      "fail with a KafkaProduceException if fail to produce a sequence of record in transaction" in {
+
+        when(kafkaTransactionalProducerAgent.produce(kRecords))
+          .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
+
+        val result = Source.single(kRecords).runWith(KSink.produceSequence(kafkaTransactionalProducerAgent))
+
+        whenReady(result.failed) { ex =>
+          verify(kafkaTransactionalProducerAgent).produce(kRecords)
+          ex shouldBe a[KafkaProduceException]
+        }
+      }
 
     }
 
@@ -107,7 +132,41 @@ class KSinkSpec
         }
       }
 
-      "fail" in {}
+      "fail with a KafkaProduceException if fail to produce and commit a single record" in {
+
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords.head, consumerGroup))
+          .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
+
+        when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
+
+        val result =
+          Source
+            .fromIterator(() => kRecords.iterator)
+            .runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+
+        whenReady(result.failed) { ex =>
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords.head, consumerGroup)
+          verify(kafkaConsumerAgent).consumerGroup
+          ex shouldBe a[KafkaProduceException]
+        }
+      }
+
+      "fail with a KafkaProduceException if fail to produce and commit a sequence of record in transaction" in {
+
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords, consumerGroup))
+          .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
+
+        when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
+
+        val result =
+          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+
+        whenReady(result.failed) { ex =>
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords, consumerGroup)
+          verify(kafkaConsumerAgent).consumerGroup
+          ex shouldBe a[KafkaProduceException]
+        }
+      }
 
     }
 

@@ -2,6 +2,7 @@ package com.github.simoexpo.as4k.producer
 
 import akka.actor.Props
 import akka.pattern.ask
+import akka.testkit.EventFilter
 import com.github.simoexpo.as4k.helper.DataHelperSpec
 import com.github.simoexpo.as4k.model.KRecord
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.{
@@ -14,14 +15,13 @@ import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.producer.{Callback, KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatcher
-import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers.{any, argThat, isNull}
+import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 
-import scala.concurrent.Future
 import scala.language.postfixOps
 
 class KafkaProducerActorSpec
@@ -56,13 +56,17 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(false)
 
-        doAnswer(new Answer[Unit]() {
-          override def answer(invocation: InvocationOnMock) =
-            Future {
+        doAnswer(new Answer[java.util.concurrent.Future[RecordMetadata]]() {
+          override def answer(invocation: InvocationOnMock) = {
+            import java.util.concurrent.Executors
+            Executors.newSingleThreadExecutor.submit(() => {
+              Thread.sleep(10)
               val recordMetadata =
                 new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L.asInstanceOf[java.lang.Long], 1, 1)
               invocation.getArgument[Callback](1).onCompletion(recordMetadata, null)
-            }
+              recordMetadata
+            })
+          }
         }).when(kafkaProducer).send(any[ProducerRecord[Int, String]], any[Callback])
 
         whenReady(kafkaProducerActor ? ProduceRecord(kRecords.head)) { _ =>
@@ -83,16 +87,30 @@ class KafkaProducerActorSpec
         }
       }
 
-      "fail with a KafkaProduceException if the producer fail to send a single record" in {
+      "fail with a KafkaProduceException if the producer fail to send a single record immediately" in {
 
-        doAnswer(new Answer[Unit]() {
-          override def answer(invocation: InvocationOnMock) =
-            Future {
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]], any[Callback]))
+          .thenThrow(new RuntimeException("something bad happened!"))
+
+        whenReady(kafkaProducerActor ? ProduceRecord(kRecords.head) failed) { exception =>
+          exception shouldBe a[KafkaProduceException]
+        }
+      }
+
+      "fail with a KafkaProduceException if the producer fail to send a single record during callback" in {
+
+        doAnswer(new Answer[java.util.concurrent.Future[RecordMetadata]]() {
+          override def answer(invocation: InvocationOnMock) = {
+            import java.util.concurrent.Executors
+            Executors.newSingleThreadExecutor.submit(() => {
+              Thread.sleep(10)
               val recordMetadata =
                 new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L.asInstanceOf[java.lang.Long], 1, 1)
               val exception = new RuntimeException("something bad happened!")
               invocation.getArgument[Callback](1).onCompletion(recordMetadata, exception)
-            }
+              recordMetadata
+            })
+          }
         }).when(kafkaProducer).send(any[ProducerRecord[Int, String]], any[Callback])
 
         whenReady(kafkaProducerActor ? ProduceRecord(kRecords.head) failed) { exception =>
@@ -185,6 +203,16 @@ class KafkaProducerActorSpec
           verify(kafkaProducer).abortTransaction()
 
           exception shouldBe a[KafkaProduceException]
+        }
+      }
+
+    }
+
+    "receiving a unexpected message" should {
+
+      "log a warning" in {
+        EventFilter.warning(start = "Unexpected message:", occurrences = 1) intercept {
+          kafkaProducerActor ! "UnexpectedMessage"
         }
       }
 

@@ -5,7 +5,7 @@ import java.util.{Map => JavaMap}
 import akka.Done
 import akka.actor.Props
 import akka.pattern.ask
-import akka.testkit.TestActors
+import akka.testkit.{EventFilter, TestActors}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
 import com.github.simoexpo.as4k.helper.DataHelperSpec
 import com.github.simoexpo.as4k.model.KRecord
@@ -34,7 +34,7 @@ class KafkaConsumerActorSpec
   val partition = 1
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
-  when(kafkaConsumerOption.topics).thenReturn(Some(List(topic)))
+  when(kafkaConsumerOption.topics).thenReturn(List(topic))
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
 
   private val PollingTimeout = 200
@@ -42,8 +42,6 @@ class KafkaConsumerActorSpec
   private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingTimeout) {
     override protected val consumer = kafkaConsumer
   }))
-
-  val sink = system.actorOf(TestActors.blackholeProps)
 
   override def beforeEach(): Unit =
     reset(kafkaConsumer)
@@ -103,11 +101,14 @@ class KafkaConsumerActorSpec
         val kRecords = records.map(KRecord(_))
 
         doAnswer(new Answer[Unit]() {
-          override def answer(invocation: InvocationOnMock) =
+          override def answer(invocation: InvocationOnMock) = {
             Future {
+              Thread.sleep(100)
               val offset = invocation.getArgument[JavaMap[TopicPartition, OffsetAndMetadata]](0)
               invocation.getArgument[OffsetCommitCallback](1).onComplete(offset, null)
             }
+            ()
+          }
         }).when(kafkaConsumer).commitAsync(any[JavaMap[TopicPartition, OffsetAndMetadata]], any[OffsetCommitCallback])
 
         val commitResult = kafkaConsumerActor ? CommitOffsets(kRecords, Some(callback))
@@ -124,12 +125,15 @@ class KafkaConsumerActorSpec
         val kRecords = records.map(KRecord(_))
 
         doAnswer(new Answer[Unit]() {
-          override def answer(invocation: InvocationOnMock) =
+          override def answer(invocation: InvocationOnMock) = {
             Future {
+              Thread.sleep(100)
               val offset = invocation.getArgument[JavaMap[TopicPartition, OffsetAndMetadata]](0)
               val exception = new RuntimeException("something bad happened!")
               invocation.getArgument[OffsetCommitCallback](1).onComplete(offset, exception)
             }
+            ()
+          }
         }).when(kafkaConsumer).commitAsync(any[JavaMap[TopicPartition, OffsetAndMetadata]], any[OffsetCommitCallback])
 
         val commitResult = kafkaConsumerActor ? CommitOffsets(kRecords, Some(callback))
@@ -155,6 +159,16 @@ class KafkaConsumerActorSpec
           exception shouldBe a[KafkaCommitException]
         }
       }
+    }
+
+    "receiving a unexpected message" should {
+
+      "log a warning" in {
+        EventFilter.warning(start = "Unexpected message:", occurrences = 1) intercept {
+          kafkaConsumerActor ! "UnexpectedMessage"
+        }
+      }
+
     }
   }
 

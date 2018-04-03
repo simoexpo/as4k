@@ -19,11 +19,15 @@ class KafkaConsumerAgentSpec
     with BeforeAndAfterEach
     with DataHelperSpec {
 
+  val groupId = "groupId"
   val topic = "topic"
   val partition = 1
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
-  when(kafkaConsumerOption.groupId).thenReturn(Some(topic))
+  when(kafkaConsumerOption.groupId).thenReturn(Some(groupId))
+  when(kafkaConsumerOption.dispatcher).thenReturn(None)
+  when(kafkaConsumerOption.topics).thenReturn(List(topic))
+  when(kafkaConsumerOption.createOne()).thenReturn(mock[KafkaConsumer[Int, String]])
 
   private val kafkaConsumerActor: TestProbe = TestProbe()
   private val kafkaConsumerActorRef: ActorRef = kafkaConsumerActor.ref

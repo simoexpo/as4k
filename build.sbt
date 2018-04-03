@@ -6,7 +6,7 @@ organization := "com.github.simoexpo"
 
 scalaVersion := "2.12.5"
 
-libraryDependencies ++= Seq(scalaTest, kafka, mockito, embeddedKafka) ++ akkaStream
+libraryDependencies ++= Seq(scalaTest, kafka, mockito, embeddedKafka, pureConfig) ++ akkaStream
 
 scalacOptions in Compile := Seq("-deprecation")
 

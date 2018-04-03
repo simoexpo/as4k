@@ -45,7 +45,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
     case ProduceRecordsAndCommit(records, consumerGroup) if producerOption.isTransactional =>
       produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], Some(consumerGroup))
 
-    case msg => log.warning("unexpected message: {}", msg)
+    case msg => log.warning("Unexpected message: {}", msg)
   }
 
   private def produce(record: KRecord[K, V], customCallback: Option[CustomSendCallback]): Try[Unit] =
@@ -59,9 +59,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
 
   private def sendCallback(consumerActor: ActorRef,
                            originalSender: ActorRef,
-                           customCallback: Option[CustomSendCallback]): Callback {
-    def onCompletion(recordMetadata: RecordMetadata, exception: Exception): Unit
-  } =
+                           customCallback: Option[CustomSendCallback]): Callback =
     new Callback {
       override def onCompletion(recordMetadata: RecordMetadata, exception: Exception): Unit = {
         Option(exception) match {

@@ -3,41 +3,41 @@ package com.github.simoexpo.as4k.producer
 import java.util.Properties
 
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.common.serialization.Serializer
 
-case class KafkaProducerOption[K, V](topic: String, isTransactional: Boolean) {
+import scala.collection.JavaConverters._
+
+case class KafkaProducerOption[K, V](topic: String,
+                                     producerSetting: Map[String, String],
+                                     dispatcher: Option[String],
+                                     keySerializer: Option[Serializer[K]],
+                                     valueSerializer: Option[Serializer[V]]) {
 
   @transient
-  private lazy val props = {
-//    val prop = new Properties()
-//    this.getClass.getDeclaredFields.filter(field => KafkaConsumerOption.PropsField.contains(field.getName)).foreach { field =>
-//      println(fieldToProp(field.getName))
-//      field.get(this).asInstanceOf[Option[Any]].map { fieldValue =>
-//        prop.put(fieldToProp(field.getName), fieldValue.toString)
-//      }
-//      prop.put("auto.offset.reset", "earliest")
-//      //      prop.put("max.poll.records", "1000")
-//    }
-//    prop
-    val props = new Properties()
-    props.put("bootstrap.servers", "localhost:9092")
-    props.put("acks", "all")
-//    props.put("retries", 0.toString)
-    props.put("batch.size", 16384.toString)
-    props.put("linger.ms", 1.toString)
-    props.put("buffer.memory", 33554432.toString)
-    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-    if (isTransactional)
-      props.put("transactional.id", "transaction_id")
-    props
-  }
+  lazy val isTransactional: Boolean = producerSetting.get("transactional.id").isDefined
 
-  def createOne() = new KafkaProducer[K, V](props)
+  def createOne() =
+    new KafkaProducer[K, V](producerSetting.asInstanceOf[Map[String, Object]].asJava,
+                            keySerializer.orNull,
+                            valueSerializer.orNull)
 
 }
 
 object KafkaProducerOption {
 
-  def fromConfig(): KafkaProducerOption[Any, Any] = ???
+  def apply[K, V](topic: String,
+                  config: String,
+                  keySerializer: Option[Serializer[K]] = None,
+                  valueSerializer: Option[Serializer[V]] = None): KafkaProducerOption[K, V] =
+    pureconfig.loadConfig[ProducerConf](config) match {
+      case Right(conf) =>
+        val kafkaProducerSetting = conf.producerSetting.map { element =>
+          (element._1.replaceAll("-", "."), element._2)
+        }
+        new KafkaProducerOption(topic, kafkaProducerSetting, conf.dispatcher, keySerializer, valueSerializer)
+      case Left(ex) => throw new IllegalArgumentException(s"Cannot load producer setting from $config: $ex")
+    }
+
+  private final case class ProducerConf(producerSetting: Map[String, String], dispatcher: Option[String])
 
 }

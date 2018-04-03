@@ -16,9 +16,17 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
   val consumerGroup: String = consumerOption.groupId.getOrElse("defaultGroup")
+  private val dispatcherConfig = consumerOption.dispatcher
 
-  protected val actor: ActorRef =
-    actorSystem.actorOf(KafkaConsumerActor.props(consumerOption, pollingTimeout).withDispatcher("consumer-dispatcher-2"))
+  protected val actor: ActorRef = {
+    val props = dispatcherConfig match {
+      case Some(dispatcher) =>
+        KafkaConsumerActor.props(consumerOption, pollingTimeout).withDispatcher(dispatcher)
+      case None =>
+        KafkaConsumerActor.props(consumerOption, pollingTimeout)
+    }
+    actorSystem.actorOf(props)
+  }
 
   def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =
     (actor ? token).map(_.asInstanceOf[List[KRecord[K, V]]])

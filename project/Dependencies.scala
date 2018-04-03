@@ -10,4 +10,5 @@ object Dependencies {
   lazy val kafka = "org.apache.kafka" % "kafka-clients" % "1.0.1"
   lazy val mockito = "org.mockito" % "mockito-core" % "2.16.0" % AllTest
   lazy val embeddedKafka = "net.manub" %% "scalatest-embedded-kafka" % "1.1.0" % AllTest
+  lazy val pureConfig = "com.github.pureconfig" %% "pureconfig" % "0.9.1"
 }

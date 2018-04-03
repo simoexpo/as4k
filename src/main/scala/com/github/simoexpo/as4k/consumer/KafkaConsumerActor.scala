@@ -46,7 +46,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 //
 //  var signalCount = 0L
 
-  self ! Subscribe(consumerOption.topics.getOrElse(List.empty))
+  self ! Subscribe(consumerOption.topics)
 
   override def receive: Receive = {
     case Subscribe(topics) =>
@@ -105,7 +105,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 //      signalCount += 1
 //      signalCommitEndTime += e - s
 
-    case msg => log.warning("unexpected message: {}", msg)
+    case msg => log.warning("Unexpected message: {}", msg)
   }
 
   private def consumerAssignment = {
@@ -173,7 +173,7 @@ private[as4k] object KafkaConsumerActor {
 
   case class CommitOffsets[K, V](record: Seq[KRecord[K, V]], callback: Option[CustomCommitCallback] = None)
       extends KafkaConsumerMessage
-  case class Subscribe(topics: List[String]) extends KafkaConsumerMessage
+  case class Subscribe(topics: Seq[String]) extends KafkaConsumerMessage
   case class StartCommit[K, V](originalSender: ActorRef, record: KRecord[K, V], callback: Option[CustomCommitCallback] = None)
       extends KafkaConsumerMessage
   case object PollToCommit extends KafkaConsumerMessage
