@@ -4,11 +4,10 @@ import akka.stream.scaladsl.{Sink, Source}
 import com.github.simoexpo.as4k.KSource._
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{ConsumerToken, KafkaCommitException}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
-import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 import com.github.simoexpo.as4k.model.KRecord
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.KafkaProduceException
 import com.github.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
-import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}

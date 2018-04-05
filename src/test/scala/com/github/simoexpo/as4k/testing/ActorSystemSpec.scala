@@ -1,4 +1,4 @@
-package com.github.simoexpo
+package com.github.simoexpo.as4k.testing
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer

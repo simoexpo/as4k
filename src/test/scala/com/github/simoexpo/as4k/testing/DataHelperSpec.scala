@@ -1,4 +1,4 @@
-package com.github.simoexpo.as4k.helper
+package com.github.simoexpo.as4k.testing
 
 import java.util.concurrent.{Future => JavaFuture, TimeUnit => JavaTimeUnit}
 

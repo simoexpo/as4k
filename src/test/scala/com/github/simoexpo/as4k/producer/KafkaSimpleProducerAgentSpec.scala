@@ -2,9 +2,8 @@ package com.github.simoexpo.as4k.producer
 
 import akka.actor.ActorRef
 import akka.testkit.TestProbe
-import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecord}
-import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterEach

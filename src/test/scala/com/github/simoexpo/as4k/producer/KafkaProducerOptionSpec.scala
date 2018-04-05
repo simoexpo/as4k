@@ -1,6 +1,6 @@
 package com.github.simoexpo.as4k.producer
 
-import com.github.simoexpo.BaseSpec
+import com.github.simoexpo.as4k.testing.BaseSpec
 
 class KafkaProducerOptionSpec extends BaseSpec {
 

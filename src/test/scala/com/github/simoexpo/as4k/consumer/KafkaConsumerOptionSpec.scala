@@ -1,6 +1,6 @@
 package com.github.simoexpo.as4k.consumer
 
-import com.github.simoexpo.BaseSpec
+import com.github.simoexpo.as4k.testing.BaseSpec
 
 class KafkaConsumerOptionSpec extends BaseSpec {
 

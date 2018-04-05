@@ -2,10 +2,9 @@ package com.github.simoexpo.as4k
 
 import akka.stream.scaladsl.Source
 import com.github.simoexpo.as4k.consumer.KafkaConsumerAgent
-import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.KafkaProduceException
 import com.github.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
-import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}

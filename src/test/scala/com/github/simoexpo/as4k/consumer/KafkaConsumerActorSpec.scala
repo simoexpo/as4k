@@ -7,9 +7,8 @@ import akka.actor.Props
 import akka.pattern.ask
 import akka.testkit.{EventFilter, TestActors}
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor._
-import com.github.simoexpo.as4k.helper.DataHelperSpec
+import com.github.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 import com.github.simoexpo.as4k.model.KRecord
-import com.github.simoexpo.{ActorSystemSpec, BaseSpec}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
 import org.mockito.ArgumentMatchers.{any, eq => mockitoEq}
