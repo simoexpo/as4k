@@ -1,6 +1,7 @@
 package com.github.simoexpo.as4k.producer
 
 import java.util
+import java.util.concurrent.TimeUnit
 
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash, Status}
@@ -94,6 +95,11 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
     Map(topicPartition -> offsetAndMetadata).asJava
   }
 
+  override def postStop(): Unit = {
+    log.info(s"Terminating producer...")
+    producer.close(1000, TimeUnit.MILLISECONDS)
+    super.postStop()
+  }
 }
 
 private[as4k] object KafkaProducerActor {

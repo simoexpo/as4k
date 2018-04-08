@@ -1,6 +1,7 @@
 package com.github.simoexpo.as4k.producer
 
 import akka.actor.ActorRef
+import akka.pattern.AskTimeoutException
 import akka.testkit.TestProbe
 import com.github.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 import com.github.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecord}
@@ -63,6 +64,20 @@ class KafkaSimpleProducerAgentSpec
 
         produceResult.failed.futureValue shouldBe a[KafkaProduceException]
       }
+    }
+
+    "cleaning the resource" should {
+
+      "allow to close the producer actor properly" in {
+
+        whenReady(kafkaProducerAgent.stopProducer) { _ =>
+          val exception = kafkaProducerAgent.produce(kRecord).failed.futureValue
+          exception shouldBe an[AskTimeoutException]
+          exception.getMessage should include("had already been terminated")
+        }
+
+      }
+
     }
 
   }

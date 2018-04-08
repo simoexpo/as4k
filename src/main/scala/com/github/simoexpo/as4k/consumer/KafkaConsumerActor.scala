@@ -158,6 +158,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 //    log.info(s"Commit: $commitTime ms distributed between $commitCount call")
 //    log.info(s"Poll: $pollTime ms distributed between $pollCount call")
 //    log.info(s"SignalEnd: $signalCommitEndTime ms distributed between $signalCount call")
+    log.info(s"Terminating consumer...")
     consumer.close(1000, TimeUnit.MILLISECONDS)
     super.postStop()
   }

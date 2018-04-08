@@ -1,7 +1,7 @@
 package com.github.simoexpo.as4k.consumer
 
-import akka.actor.{ActorRef, ActorSystem}
-import akka.pattern.ask
+import akka.actor.{ActorRef, ActorSystem, PoisonPill}
+import akka.pattern.{ask, gracefulStop}
 import akka.util.Timeout
 import com.github.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsets, ConsumerToken}
 import com.github.simoexpo.as4k.model.CustomCallback.CustomCommitCallback
@@ -12,7 +12,6 @@ import scala.language.implicitConversions
 
 class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long)(implicit actorSystem: ActorSystem,
                                                                                                 timeout: Timeout) {
-
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
   val consumerGroup: String = consumerOption.groupId.getOrElse("defaultGroup")
@@ -27,6 +26,8 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
     }
     actorSystem.actorOf(props)
   }
+
+  def stopConsumer: Future[Boolean] = gracefulStop(actor, timeout.duration, PoisonPill)
 
   def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =
     (actor ? token).map(_.asInstanceOf[List[KRecord[K, V]]])
