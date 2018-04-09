@@ -1,6 +1,7 @@
 import Dependencies._
 
 parallelExecution in Test := false
+parallelExecution in IntegrationTest := false
 
 organization := "com.github.simoexpo"
 
