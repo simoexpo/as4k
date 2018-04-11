@@ -8,6 +8,7 @@ import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecords, ProduceRecordsAndCommit}
+import org.simoexpo.as4k.producer.KafkaTransactionalProducerAgent.KafkaTransactionalProducerTimeoutException
 import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
 class KafkaTransactionalProducerAgentSpec
@@ -32,7 +33,7 @@ class KafkaTransactionalProducerAgentSpec
       override protected val actor: ActorRef = kafkaProducerActorRef
     }
 
-  "KafkaProducerAgent" when {
+  "KafkaTransactionalProducerAgent" when {
 
     val topic = "topic"
     val partition = 1
@@ -62,6 +63,16 @@ class KafkaTransactionalProducerAgentSpec
           akka.actor.Status.Failure(KafkaProduceException(new RuntimeException("Something bad happened!"))))
 
         produceResult.failed.futureValue shouldBe a[KafkaProduceException]
+      }
+
+      "fail with a KafkaTransactionalProducerTimeoutException if the no response are given before the timeout" in {
+
+        val produceResult = kafkaProducerAgent.produce(kRecords)
+
+        kafkaProducerActor.expectMsg(ProduceRecords(kRecords))
+
+        produceResult.failed.futureValue shouldBe a[KafkaTransactionalProducerTimeoutException]
+
       }
     }
 
@@ -105,6 +116,22 @@ class KafkaTransactionalProducerAgentSpec
 
         produceResult.failed.futureValue shouldBe a[KafkaProduceException]
       }
+
+      "fail with a KafkaTransactionalProducerTimeoutException if the no response are given before the timeout" in {
+
+        val oneRecord = kRecords.head
+        val singleProduceResult = kafkaProducerAgent.produceAndCommit(oneRecord, consumerGroup)
+
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(List(oneRecord), consumerGroup))
+
+        val listProduceResult = kafkaProducerAgent.produceAndCommit(kRecords, consumerGroup)
+
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords, consumerGroup))
+
+        singleProduceResult.failed.futureValue shouldBe a[KafkaTransactionalProducerTimeoutException]
+        listProduceResult.failed.futureValue shouldBe a[KafkaTransactionalProducerTimeoutException]
+
+      }
     }
 
     "cleaning the resource" should {
@@ -113,7 +140,7 @@ class KafkaTransactionalProducerAgentSpec
 
         whenReady(kafkaProducerAgent.stopProducer) { _ =>
           val exception = kafkaProducerAgent.produce(kRecords).failed.futureValue
-          exception shouldBe an[AskTimeoutException]
+          exception shouldBe an[KafkaTransactionalProducerTimeoutException]
           exception.getMessage should include("had already been terminated")
         }
 

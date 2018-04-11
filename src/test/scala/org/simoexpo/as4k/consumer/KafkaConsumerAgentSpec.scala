@@ -8,6 +8,7 @@ import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.simoexpo.as4k.consumer.KafkaConsumerActor._
+import org.simoexpo.as4k.consumer.KafkaConsumerAgent.KafkaConsumerTimeoutException
 import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
 class KafkaConsumerAgentSpec
@@ -68,6 +69,17 @@ class KafkaConsumerAgentSpec
           exception shouldBe a[KafkaPollingException]
         }
       }
+
+      "fail with a KafkaConsumerTimeoutException if the no response are given before the timeout" in {
+
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+
+        kafkaConsumerActor.expectMsg(ConsumerToken)
+
+        whenReady(recordsConsumedFuture.failed) { ex =>
+          ex shouldBe a[KafkaConsumerTimeoutException]
+        }
+      }
     }
 
     "asking the consumer actor to commit" should {
@@ -117,6 +129,41 @@ class KafkaConsumerAgentSpec
 
         recordsCommittedFuture.failed.futureValue shouldBe a[KafkaCommitException]
       }
+
+      "fail with a KafkaCosnumerTimeoutException if the no response are given before the timeout" in {
+
+        val kRecord = kRecords.head
+
+        val actualRecords = List(kRecord)
+
+        val recordCommittedFuture = kafkaConsumerAgent.commit(kRecord)
+        kafkaConsumerActor.expectMsgPF() {
+          case CommitOffsets(`actualRecords`, None) => ()
+        }
+
+        val recordsCommittedFuture = kafkaConsumerAgent.commitBatch(kRecords, Some(callback))
+        kafkaConsumerActor.expectMsgPF() {
+          case CommitOffsets(`kRecords`, Some(_)) => ()
+        }
+
+        recordCommittedFuture.failed.futureValue shouldBe a[KafkaConsumerTimeoutException]
+        recordsCommittedFuture.failed.futureValue shouldBe a[KafkaConsumerTimeoutException]
+
+      }
+    }
+
+    "cleaning the resource" should {
+
+      "allow to close the consumer actor properly" in {
+
+        whenReady(kafkaConsumerAgent.stopConsumer) { _ =>
+          val exception = kafkaConsumerAgent.askForRecords(ConsumerToken).failed.futureValue
+          exception shouldBe an[KafkaConsumerTimeoutException]
+          exception.getMessage should include("had already been terminated")
+        }
+
+      }
+
     }
   }
 

@@ -8,6 +8,7 @@ import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.simoexpo.as4k.producer.KafkaProducerActor.{KafkaProduceException, ProduceRecord}
+import org.simoexpo.as4k.producer.KafkaSimpleProducerAgent.KafkaSimpleProducerTimeoutException
 import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
 class KafkaSimpleProducerAgentSpec
@@ -32,7 +33,7 @@ class KafkaSimpleProducerAgentSpec
       override protected val actor: ActorRef = kafkaProducerActorRef
     }
 
-  "KafkaProducerAgent" when {
+  "KafkaSimpleProducerAgent" when {
 
     val topic = "topic"
     val partition = 1
@@ -64,6 +65,14 @@ class KafkaSimpleProducerAgentSpec
 
         produceResult.failed.futureValue shouldBe a[KafkaProduceException]
       }
+
+      "fail with a KafkaSimpleProducerTimeoutException if the no response are given before the timeout" in {
+
+        val produceResult = kafkaProducerAgent.produce(kRecord)
+        kafkaProducerActor.expectMsg(ProduceRecord(kRecord))
+
+        produceResult.failed.futureValue shouldBe a[KafkaSimpleProducerTimeoutException]
+      }
     }
 
     "cleaning the resource" should {
@@ -72,7 +81,7 @@ class KafkaSimpleProducerAgentSpec
 
         whenReady(kafkaProducerAgent.stopProducer) { _ =>
           val exception = kafkaProducerAgent.produce(kRecord).failed.futureValue
-          exception shouldBe an[AskTimeoutException]
+          exception shouldBe an[KafkaSimpleProducerTimeoutException]
           exception.getMessage should include("had already been terminated")
         }
 
