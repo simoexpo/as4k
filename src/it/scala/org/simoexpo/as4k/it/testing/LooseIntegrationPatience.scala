@@ -7,7 +7,7 @@ trait LooseIntegrationPatience extends AbstractPatienceConfiguration { this: Pat
 
   implicit override val patienceConfig: PatienceConfig =
     PatienceConfig(
-      timeout = scaled(Span(20, Seconds)),
+      timeout = scaled(Span(30, Seconds)),
       interval = scaled(Span(200, Millis))
     )
 

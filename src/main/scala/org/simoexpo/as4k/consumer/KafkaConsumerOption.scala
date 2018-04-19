@@ -12,7 +12,7 @@ case class KafkaConsumerOption[K, V] private (topics: Seq[String],
                                               valueDeserializer: Option[Deserializer[V]]) {
 
   @transient
-  lazy val groupId: Option[String] = consumerSetting.get("group.id")
+  lazy val groupId: String = consumerSetting.getOrElse("group.id", "as4kDefaultGroup")
 
   def createOne(): KafkaConsumer[K, V] =
     new KafkaConsumer[K, V](consumerSetting.asInstanceOf[Map[String, Object]].asJava,

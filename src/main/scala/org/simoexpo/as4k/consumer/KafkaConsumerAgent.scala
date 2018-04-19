@@ -15,7 +15,7 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
                                                                                                 timeout: Timeout) {
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
-  val consumerGroup: String = consumerOption.groupId.getOrElse("defaultGroup")
+  val consumerGroup: String = consumerOption.groupId
   private val dispatcherConfig = consumerOption.dispatcher
 
   protected val actor: ActorRef = {

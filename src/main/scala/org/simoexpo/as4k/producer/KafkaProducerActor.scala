@@ -41,10 +41,10 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
       produce(record.asInstanceOf[KRecord[K, V]], callback)
 
     case ProduceRecords(records) if producerOption.isTransactional =>
-      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], None)
+      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]])
 
-    case ProduceRecordsAndCommit(records, consumerGroup) if producerOption.isTransactional =>
-      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], Some(consumerGroup))
+    case ProduceRecordsAndCommit(records) if producerOption.isTransactional =>
+      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], true)
 
     case msg => log.warning("Unexpected message: {}", msg)
   }
@@ -73,13 +73,12 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
       }
     }
 
-  private def produceInTransaction(records: Seq[KRecord[K, V]], consumerGroup: Option[String]): Try[Unit] =
+  private def produceInTransaction(records: Seq[KRecord[K, V]], commit: Boolean = false): Try[Unit] =
     Try {
       producer.beginTransaction()
-      records.foreach { record =>
-        consumerGroup.foreach(consumerGroupId => producer.sendOffsetsToTransaction(committableMetadata(record), consumerGroupId))
-        producer.send(new ProducerRecord(topic, record.key, record.value), null)
-      }
+      records.foreach(record => producer.send(new ProducerRecord(topic, record.key, record.value), null))
+      if (commit && records.nonEmpty)
+        producer.sendOffsetsToTransaction(committableMetadata(records.last), records.last.metadata.consumedBy)
       producer.commitTransaction()
       sender() ! Done
     }.recover {
@@ -90,8 +89,8 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
     }
 
   protected def committableMetadata(record: KRecord[K, V]): util.Map[TopicPartition, OffsetAndMetadata] = {
-    val topicPartition = new TopicPartition(record.topic, record.partition)
-    val offsetAndMetadata = new OffsetAndMetadata(record.offset + 1)
+    val topicPartition = new TopicPartition(record.metadata.topic, record.metadata.partition)
+    val offsetAndMetadata = new OffsetAndMetadata(record.metadata.offset + 1)
     Map(topicPartition -> offsetAndMetadata).asJava
   }
 
@@ -104,7 +103,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
 
 private[as4k] object KafkaProducerActor {
 
-  case class ProduceRecordsAndCommit[K, V](records: Seq[KRecord[K, V]], consumerGroup: String)
+  case class ProduceRecordsAndCommit[K, V](records: Seq[KRecord[K, V]])
   case class ProduceRecords[K, V](records: Seq[KRecord[K, V]])
   case class ProduceRecord[K, V](record: KRecord[K, V], callback: Option[CustomSendCallback] = None)
 

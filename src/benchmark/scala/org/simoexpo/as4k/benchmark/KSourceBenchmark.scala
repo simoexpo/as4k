@@ -3,7 +3,7 @@ package org.simoexpo.as4k.benchmark
 import akka.stream.scaladsl.{Sink, Source}
 import org.simoexpo.as4k.KSource
 import org.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerOption}
-import org.simoexpo.as4k.model.KRecord
+import org.simoexpo.as4k.model.{KRecord, KRecordMetadata}
 import org.simoexpo.as4k.producer.{KafkaProducerOption, KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import org.simoexpo.as4k.KSource._
 
@@ -17,7 +17,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
 
   val recordsSize = 1000000
 
-  val kRecords = Stream.from(0).map(n => aKRecord(n, n.toString, s"value$n", "topic", 1))
+  val kRecords = Stream.from(0).map(n => aKRecord(n, n.toString, s"value$n", "topic", 1, "defaultGroup"))
 
   val benchmark = for {
     _ <- setUpBenchmarkEnv
@@ -163,7 +163,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
       KSource
         .fromKafkaConsumer(kafkaConsumerAgent)
         .grouped(batchSize)
-        .produceAndCommit(kafkaProducerAgent, kafkaConsumerAgent)
+        .produceAndCommit(kafkaProducerAgent)
         .take(recordsSize / batchSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
@@ -184,7 +184,9 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
   private def printBenchMsgPerSecResult(benchName: String, recordSize: Int, time: Long): Unit =
     println(Console.GREEN + s"$benchName Benchmark - msg/s: ${recordsSize / time.toDouble * 1000}" + Console.RESET)
 
-  private def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int) =
-    KRecord(key, value, topic, partition, offset, System.currentTimeMillis())
+  def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int, consumedBy: String): KRecord[K, V] = {
+    val metadata = KRecordMetadata(topic, partition, offset, System.currentTimeMillis(), consumedBy)
+    KRecord(key, value, metadata)
+  }
 
 }

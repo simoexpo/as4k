@@ -32,9 +32,11 @@ class KafkaConsumerActorSpec
 
   val topic = "topic"
   val partition = 1
+  val consumerGroup = "defaultGroup"
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
+  when(kafkaConsumerOption.groupId).thenReturn(consumerGroup)
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
 
   private val PollingTimeout = 200
@@ -56,7 +58,8 @@ class KafkaConsumerActorSpec
 
         val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), records.asJava)).asJava)
 
-        val expectedKRecords = consumerRecords.iterator().asScala.map(KRecord(_)).toList
+        val expectedKRecords =
+          consumerRecords.iterator().asScala.map(record => KRecord(record, consumerGroup)).toList
 
         when(kafkaConsumer.poll(PollingTimeout)).thenReturn(consumerRecords)
 
@@ -98,7 +101,7 @@ class KafkaConsumerActorSpec
 
       "commitAsync the offset of the last record in a seq, start polling until callback response and return if success" in {
 
-        val kRecords = records.map(model.KRecord(_))
+        val kRecords = records.map(record => KRecord(record, consumerGroup))
 
         doAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock) = {
@@ -122,7 +125,7 @@ class KafkaConsumerActorSpec
 
       "commitAsync the offset of the last record in a seq, start polling until callback response and return if failure" in {
 
-        val kRecords = records.map(model.KRecord(_))
+        val kRecords = records.map(record => KRecord(record, consumerGroup))
 
         doAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock) = {
@@ -148,7 +151,7 @@ class KafkaConsumerActorSpec
 
       "fail with a KafkaCommitException if the call to commitAsync fails" in {
 
-        val kRecords = records.map(model.KRecord(_))
+        val kRecords = records.map(record => KRecord(record, consumerGroup))
 
         when(kafkaConsumer.commitAsync(any[JavaMap[TopicPartition, OffsetAndMetadata]], any[OffsetCommitCallback]))
           .thenThrow(new RuntimeException("something bad happened!"))

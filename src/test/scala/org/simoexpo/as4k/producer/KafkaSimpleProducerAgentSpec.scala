@@ -38,7 +38,7 @@ class KafkaSimpleProducerAgentSpec
     val topic = "topic"
     val partition = 1
 
-    val kRecord = aKRecord(0, 0, "value0", topic, partition)
+    val kRecord = aKRecord(0, 0, "value0", topic, partition, "defaultGroup")
 
     "producing records" should {
 

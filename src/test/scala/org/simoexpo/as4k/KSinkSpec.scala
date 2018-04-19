@@ -32,7 +32,7 @@ class KSinkSpec
     val topic = "topic"
     val partition = 1
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
 
     "producing records on a topic" should {
 
@@ -98,71 +98,63 @@ class KSinkSpec
       "allow to produce and commit in transaction a single KRecord with a KafkaTransactionalProducerAgent" in {
 
         kRecords.foreach { record =>
-          when(kafkaTransactionalProducerAgent.produceAndCommit(record, consumerGroup)).thenReturn(Future.successful(record))
+          when(kafkaTransactionalProducerAgent.produceAndCommit(record)).thenReturn(Future.successful(record))
         }
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
         val result =
-          Source
-            .fromIterator(() => kRecords.iterator)
-            .runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+          Source.fromIterator(() => kRecords.iterator).runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent))
 
         whenReady(result) { _ =>
           kRecords.foreach { record =>
-            verify(kafkaTransactionalProducerAgent).produceAndCommit(record, consumerGroup)
+            verify(kafkaTransactionalProducerAgent).produceAndCommit(record)
           }
-          verify(kafkaConsumerAgent, times(kRecords.size)).consumerGroup
         }
       }
 
       "allow to produce and commit in transaction a list of KRecord with a KafkaTransactionalProducerAgent" in {
 
-        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords, consumerGroup)).thenReturn(Future.successful(kRecords))
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords)).thenReturn(Future.successful(kRecords))
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
         val result =
-          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent))
 
         whenReady(result) { _ =>
-          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords, consumerGroup)
-          verify(kafkaConsumerAgent).consumerGroup
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords)
         }
       }
 
       "fail with a KafkaProduceException if fail to produce and commit a single record" in {
 
-        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords.head, consumerGroup))
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords.head))
           .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
         val result =
-          Source
-            .fromIterator(() => kRecords.iterator)
-            .runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+          Source.fromIterator(() => kRecords.iterator).runWith(KSink.produceAndCommit(kafkaTransactionalProducerAgent))
 
         whenReady(result.failed) { ex =>
-          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords.head, consumerGroup)
-          verify(kafkaConsumerAgent).consumerGroup
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords.head)
           ex shouldBe a[KafkaProduceException]
         }
       }
 
       "fail with a KafkaProduceException if fail to produce and commit a sequence of record in transaction" in {
 
-        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords, consumerGroup))
+        when(kafkaTransactionalProducerAgent.produceAndCommit(kRecords))
           .thenReturn(Future.failed(KafkaProduceException(new RuntimeException("something bad happened!"))))
 
         when(kafkaConsumerAgent.consumerGroup).thenReturn(consumerGroup)
 
         val result =
-          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent, kafkaConsumerAgent))
+          Source.single(kRecords).runWith(KSink.produceSequenceAndCommit(kafkaTransactionalProducerAgent))
 
         whenReady(result.failed) { ex =>
-          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords, consumerGroup)
-          verify(kafkaConsumerAgent).consumerGroup
+          verify(kafkaTransactionalProducerAgent).produceAndCommit(kRecords)
           ex shouldBe a[KafkaProduceException]
         }
       }

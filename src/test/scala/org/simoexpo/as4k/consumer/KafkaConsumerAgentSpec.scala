@@ -24,7 +24,7 @@ class KafkaConsumerAgentSpec
   val partition = 1
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
-  when(kafkaConsumerOption.groupId).thenReturn(Some(groupId))
+  when(kafkaConsumerOption.groupId).thenReturn(groupId)
   when(kafkaConsumerOption.dispatcher).thenReturn(None)
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
   when(kafkaConsumerOption.createOne()).thenReturn(mock[KafkaConsumer[Int, String]])
@@ -41,7 +41,7 @@ class KafkaConsumerAgentSpec
 
   "KafkaConsumerAgent" when {
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, groupId)).toList
 
     "asking the consumer actor to poll" should {
 

@@ -38,7 +38,7 @@ class KafkaTransactionalProducerAgentSpec
     val topic = "topic"
     val partition = 1
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
 
     "producing records" should {
 
@@ -84,9 +84,9 @@ class KafkaTransactionalProducerAgentSpec
 
         val oneRecord = kRecords.head
 
-        val produceResult = kafkaProducerAgent.produceAndCommit(oneRecord, consumerGroup)
+        val produceResult = kafkaProducerAgent.produceAndCommit(oneRecord)
 
-        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(List(oneRecord), consumerGroup))
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(List(oneRecord)))
         kafkaProducerActor.reply(())
 
         whenReady(produceResult) { record =>
@@ -96,9 +96,9 @@ class KafkaTransactionalProducerAgentSpec
 
       "produce and commit a list of records" in {
 
-        val produceResult = kafkaProducerAgent.produceAndCommit(kRecords, consumerGroup)
+        val produceResult = kafkaProducerAgent.produceAndCommit(kRecords)
 
-        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords, consumerGroup))
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords))
         kafkaProducerActor.reply(())
 
         whenReady(produceResult) { records =>
@@ -108,9 +108,9 @@ class KafkaTransactionalProducerAgentSpec
 
       "fail with a KafkaProduceException if kafka producer actor fails" in {
 
-        val produceResult = kafkaProducerAgent.produceAndCommit(kRecords, consumerGroup)
+        val produceResult = kafkaProducerAgent.produceAndCommit(kRecords)
 
-        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords, consumerGroup))
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords))
         kafkaProducerActor.reply(
           akka.actor.Status.Failure(KafkaProduceException(new RuntimeException("Something bad happened!"))))
 
@@ -120,13 +120,13 @@ class KafkaTransactionalProducerAgentSpec
       "fail with a KafkaTransactionalProducerTimeoutException if the no response are given before the timeout" in {
 
         val oneRecord = kRecords.head
-        val singleProduceResult = kafkaProducerAgent.produceAndCommit(oneRecord, consumerGroup)
+        val singleProduceResult = kafkaProducerAgent.produceAndCommit(oneRecord)
 
-        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(List(oneRecord), consumerGroup))
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(List(oneRecord)))
 
-        val listProduceResult = kafkaProducerAgent.produceAndCommit(kRecords, consumerGroup)
+        val listProduceResult = kafkaProducerAgent.produceAndCommit(kRecords)
 
-        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords, consumerGroup))
+        kafkaProducerActor.expectMsg(ProduceRecordsAndCommit(kRecords))
 
         singleProduceResult.failed.futureValue shouldBe a[KafkaTransactionalProducerTimeoutException]
         listProduceResult.failed.futureValue shouldBe a[KafkaTransactionalProducerTimeoutException]

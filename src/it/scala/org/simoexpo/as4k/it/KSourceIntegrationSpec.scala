@@ -180,7 +180,8 @@ class KSourceIntegrationSpec
 
         val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
 
-        val kafkaConsumerOptionTwo: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaConsumerOptionTwo: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-other-consumer")
 
         val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOptionTwo, 100)
 
@@ -213,12 +214,13 @@ class KSourceIntegrationSpec
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
-        val kafkaConsumerOptionTwo: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOptionTwo, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
         KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(100).grouped(10).produce(kafkaProducerAgent).runWith(Sink.ignore)
-        val resultFuture = KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(100).runWith(Sink.seq)
+        val resultFuture = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
 
         whenReady(resultFuture) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe messages
@@ -248,24 +250,17 @@ class KSourceIntegrationSpec
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
-        val kafkaConsumerOptionThree: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaConsumerAgentThree = new KafkaConsumerAgent(kafkaConsumerOptionThree, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgentThree).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
 
         for {
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(50)
-            .produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentOne)
-            .runWith(Sink.ignore)
+          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(50).produceAndCommit(kafkaProducerAgent).runWith(Sink.ignore)
           _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(50)
-            .produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentTwo)
-            .runWith(Sink.ignore)
+          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(50).produceAndCommit(kafkaProducerAgent).runWith(Sink.ignore)
         } yield ()
 
         whenReady(consumedRecords) { consumedMessages =>
@@ -295,25 +290,26 @@ class KSourceIntegrationSpec
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
-        val kafkaConsumerOptionThree: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaConsumerAgentThree = new KafkaConsumerAgent(kafkaConsumerOptionThree, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgentThree).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
 
         for {
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentOne)
             .take(50)
             .grouped(10)
-            .produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentOne)
+            .produceAndCommit(kafkaProducerAgent)
             .runWith(Sink.ignore)
           _ <- kafkaConsumerAgentOne.stopConsumer
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentTwo)
             .take(50)
             .grouped(10)
-            .produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentTwo)
+            .produceAndCommit(kafkaProducerAgent)
             .runWith(Sink.ignore)
         } yield ()
 

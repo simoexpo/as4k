@@ -16,7 +16,7 @@ class KafkaConsumerOptionSpec extends BaseSpec {
 
       noException should be thrownBy kafkaConsumerOption.createOne()
 
-      kafkaConsumerOption.groupId shouldBe Some("test")
+      kafkaConsumerOption.groupId shouldBe "test"
       kafkaConsumerOption.topics shouldBe topics
       props("client.id") shouldBe "integrationTest"
       props("bootstrap.servers") shouldBe "127.0.0.1:9092"

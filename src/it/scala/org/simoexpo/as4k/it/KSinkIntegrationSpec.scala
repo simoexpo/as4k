@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.scalatest.concurrent.ScalaFutures
 import org.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerOption}
 import org.simoexpo.as4k.it.testing.{ActorSystemSpec, BaseSpec, LooseIntegrationPatience}
-import org.simoexpo.as4k.model.KRecord
+import org.simoexpo.as4k.model.{KRecord, KRecordMetadata}
 import org.simoexpo.as4k.producer.{KafkaProducerOption, KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import org.simoexpo.as4k.{KSink, KSource}
 
@@ -31,7 +31,7 @@ class KSinkIntegrationSpec
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
       KafkaProducerOption(outputTopic, "my-transactional-producer")
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n.toString, s"value$n", inputTopic, 1)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n.toString, s"value$n", inputTopic, 1, "defaultGroup")).toList
 
     "allow to produce message individually with a simple producer" in {
 
@@ -96,22 +96,17 @@ class KSinkIntegrationSpec
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
-        val kafkaConsumerOptionThree: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaConsumerAgentThree = new KafkaConsumerAgent(kafkaConsumerOptionThree, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgentThree).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
 
         for {
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(50)
-            .runWith(KSink.produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentOne))
+          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(50).runWith(KSink.produceAndCommit(kafkaProducerAgent))
           _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(50)
-            .runWith(KSink.produceAndCommit(kafkaProducerAgent, kafkaConsumerAgentTwo))
+          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(50).runWith(KSink.produceAndCommit(kafkaProducerAgent))
         } yield ()
 
         whenReady(consumedRecords) { consumedMessages =>
@@ -141,24 +136,25 @@ class KSinkIntegrationSpec
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
-        val kafkaConsumerOptionThree: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer-2")
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaConsumerAgentThree = new KafkaConsumerAgent(kafkaConsumerOptionThree, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgentThree).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
 
         for {
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentOne)
             .take(50)
             .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent, kafkaConsumerAgentOne))
+            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
           _ <- kafkaConsumerAgentOne.stopConsumer
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentTwo)
             .take(50)
             .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent, kafkaConsumerAgentTwo))
+            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
         } yield ()
 
         whenReady(consumedRecords) { consumedMessages =>
@@ -169,6 +165,9 @@ class KSinkIntegrationSpec
     }
   }
 
-  protected def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int) =
-    KRecord(key, value, topic, partition, offset, System.currentTimeMillis())
+  private def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int, consumedBy: String): KRecord[K, V] = {
+    val metadata = KRecordMetadata(topic, partition, offset, System.currentTimeMillis(), consumedBy)
+    KRecord(key, value, metadata)
+  }
+
 }

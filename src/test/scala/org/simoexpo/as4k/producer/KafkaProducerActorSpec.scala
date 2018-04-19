@@ -47,7 +47,7 @@ class KafkaProducerActorSpec
     val topic = "topic"
     val partition = 1
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
 
     "producing records" should {
 
@@ -142,16 +142,14 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        val consumerGroup = "consumerGroup"
-
         when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
 
-        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords, consumerGroup)) { _ =>
+        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords)) { _ =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(record), consumerGroup)
             verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
           }
+          verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer).commitTransaction()
         }
 
@@ -161,17 +159,15 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        val consumerGroup = "consumerGroup"
-
         when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
         when(kafkaProducer.commitTransaction()).thenThrow(new RuntimeException("Something bad happened!"))
 
-        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords, consumerGroup) failed) { exception =>
+        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(record), consumerGroup)
             verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
           }
+          verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer).commitTransaction()
           verify(kafkaProducer).abortTransaction()
 
@@ -180,24 +176,39 @@ class KafkaProducerActorSpec
 
       }
 
+      "fail with a KafkaProduceException if the send fail and abort transaction" in {
+
+        when(kafkaProducerOption.isTransactional).thenReturn(true)
+
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull()))
+          .thenThrow(new RuntimeException("Something bad happened!"))
+
+        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
+          verify(kafkaProducer).beginTransaction()
+          verify(kafkaProducer).send(any[ProducerRecord[Int, String]], isNull())
+          verify(kafkaProducer, times(0)).sendOffsetsToTransaction(committableMetadata(kRecords.last),
+                                                                   kRecords.last.metadata.consumedBy)
+          verify(kafkaProducer, times(0)).commitTransaction()
+          verify(kafkaProducer).abortTransaction()
+
+          exception shouldBe a[KafkaProduceException]
+        }
+      }
+
       "fail with a KafkaProduceException if the commit fail and abort transaction" in {
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        val consumerGroup = "consumerGroup"
-        val failedRecordIndex = 20
-
-        when(kafkaProducer.sendOffsetsToTransaction(committableMetadata(kRecords(failedRecordIndex)), consumerGroup))
+        when(kafkaProducer.sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy))
           .thenThrow(new RuntimeException("Something bad happened!"))
         when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
 
-        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords, consumerGroup) failed) { exception =>
+        whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
           verify(kafkaProducer).beginTransaction()
-          kRecords.slice(0, failedRecordIndex).foreach { record =>
-            verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(record), consumerGroup)
+          kRecords.foreach { record =>
             verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
           }
-          verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords(failedRecordIndex)), consumerGroup)
+          verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer, times(0)).commitTransaction()
           verify(kafkaProducer).abortTransaction()
 
