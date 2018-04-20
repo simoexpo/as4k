@@ -7,7 +7,7 @@ object Dependencies {
   private lazy val ScalaTestVersion = "3.0.5"
   private lazy val AkkaStreamVersion = "2.5.12"
   private lazy val KafkaClientsVersion = "1.0.1"
-  private lazy val MockitoVersion = "2.18.0"
+  private lazy val MockitoVersion = "2.18.3"
   private lazy val EmbeddedKafkaVersion = "1.1.0"
   private lazy val PureConfigVersion = "0.9.1"
 

@@ -37,6 +37,8 @@ class KSourceIntegrationSpec
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
       KafkaProducerOption(outputTopic, "my-transactional-producer")
 
+    val recordsSize = 100
+
     "allow to consume message from a topic" in {
 
       val messages = Range(0, 100).map { n =>
@@ -52,7 +54,7 @@ class KSourceIntegrationSpec
 
         val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
 
-        val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(100).runWith(Sink.seq)
+        val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
         whenReady(result) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe messages
@@ -63,7 +65,7 @@ class KSourceIntegrationSpec
 
     "allow to commit message individually" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -81,27 +83,27 @@ class KSourceIntegrationSpec
         val resultFuture = for {
           firstResult <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(50)
-            .commit(1)(kafkaConsumerAgentOne)
+            .take(recordsSize / 2)
+            .commit()(kafkaConsumerAgentOne)
             .runWith(Sink.seq)
           _ <- kafkaConsumerAgentOne.stopConsumer
           secondResult <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(50)
-            .commit(1)(kafkaConsumerAgentTwo)
+            .take(recordsSize / 2)
+            .commit()(kafkaConsumerAgentTwo)
             .runWith(Sink.seq)
         } yield (firstResult, secondResult)
 
         whenReady(resultFuture) { result =>
-          result._1.map(record => (record.key, record.value)) shouldBe messages.take(50)
-          result._2.map(record => (record.key, record.value)) shouldBe messages.drop(50)
+          result._1.map(record => (record.key, record.value)) shouldBe messages.take(recordsSize / 2)
+          result._2.map(record => (record.key, record.value)) shouldBe messages.drop(recordsSize / 2)
         }
       }
     }
 
     "allow to commit a sequence of message" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -119,29 +121,29 @@ class KSourceIntegrationSpec
         val resultFuture = for {
           firstResult <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(50)
+            .take(recordsSize / 2)
             .grouped(10)
             .commit(3)(kafkaConsumerAgentOne)
             .runWith(Sink.seq)
           _ <- kafkaConsumerAgentOne.stopConsumer
           secondResult <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(50)
+            .take(recordsSize / 2)
             .grouped(10)
             .commit(3)(kafkaConsumerAgentTwo)
             .runWith(Sink.seq)
         } yield (firstResult, secondResult)
 
         whenReady(resultFuture) { result =>
-          result._1.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.take(50)
-          result._2.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.drop(50)
+          result._1.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.take(recordsSize / 2)
+          result._2.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.drop(recordsSize / 2)
         }
       }
     }
 
     "allow to map value of messages" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -158,7 +160,7 @@ class KSourceIntegrationSpec
 
         val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
 
-        val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(100).mapValue(mapFunction).runWith(Sink.seq)
+        val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).mapValue(mapFunction).runWith(Sink.seq)
 
         whenReady(result) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe mappedValueMessages
@@ -169,7 +171,7 @@ class KSourceIntegrationSpec
 
     "allow to produce message individually with a simple producer" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -191,8 +193,8 @@ class KSourceIntegrationSpec
 
         val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOptionTwo, 100)
 
-        KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(100).produce(3)(kafkaProducerAgent).runWith(Sink.ignore)
-        val resultFuture = KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(100).runWith(Sink.seq)
+        KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(recordsSize).produce(3)(kafkaProducerAgent).runWith(Sink.ignore)
+        val resultFuture = KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(recordsSize).runWith(Sink.seq)
 
         whenReady(resultFuture) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe messages
@@ -203,7 +205,7 @@ class KSourceIntegrationSpec
 
     "allow to produce a sequence of message with a transactional producer" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -225,8 +227,13 @@ class KSourceIntegrationSpec
 
         val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(100).grouped(10).produce(kafkaProducerAgent).runWith(Sink.ignore)
-        val resultFuture = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
+        KSource
+          .fromKafkaConsumer(kafkaConsumerAgentOne)
+          .take(recordsSize)
+          .grouped(10)
+          .produce(kafkaProducerAgent)
+          .runWith(Sink.ignore)
+        val resultFuture = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
         whenReady(resultFuture) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe messages
@@ -237,7 +244,7 @@ class KSourceIntegrationSpec
 
     "allow to produce and commit message individually in a transaction with a transactional producer" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -261,12 +268,20 @@ class KSourceIntegrationSpec
 
         val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
         for {
-          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(50).produceAndCommit(kafkaProducerAgent).runWith(Sink.ignore)
+          _ <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentOne)
+            .take(recordsSize / 2)
+            .produceAndCommit(kafkaProducerAgent)
+            .runWith(Sink.ignore)
           _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(50).produceAndCommit(kafkaProducerAgent).runWith(Sink.ignore)
+          _ <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentTwo)
+            .take(recordsSize / 2)
+            .produceAndCommit(kafkaProducerAgent)
+            .runWith(Sink.ignore)
         } yield ()
 
         whenReady(consumedRecords) { consumedMessages =>
@@ -277,7 +292,7 @@ class KSourceIntegrationSpec
 
     "allow to produce and commit a sequence of message in a transaction with a transactional producer" in {
 
-      val messages = Range(0, 100).map { n =>
+      val messages = Range(0, recordsSize).map { n =>
         (n.toString, n.toString)
       }
 
@@ -301,19 +316,19 @@ class KSourceIntegrationSpec
 
         val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(100).runWith(Sink.seq)
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
         for {
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(50)
+            .take(recordsSize / 2)
             .grouped(10)
             .produceAndCommit(kafkaProducerAgent)
             .runWith(Sink.ignore)
           _ <- kafkaConsumerAgentOne.stopConsumer
           _ <- KSource
             .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(50)
+            .take(recordsSize / 2)
             .grouped(10)
             .produceAndCommit(kafkaProducerAgent)
             .runWith(Sink.ignore)
