@@ -11,6 +11,8 @@ import org.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerOption}
 import org.simoexpo.as4k.it.testing.{ActorSystemSpec, BaseSpec, LooseIntegrationPatience}
 import org.simoexpo.as4k.producer.{KafkaProducerOption, KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 
+import scala.util.Try
+
 class KSourceIntegrationSpec
     extends BaseSpec
     with ActorSystemSpec
@@ -20,8 +22,8 @@ class KSourceIntegrationSpec
     with LooseIntegrationPatience {
 
   //Need these because apparently kafka is not always stopped properly
-  override def afterEach(): Unit =
-    Thread.sleep(10000)
+//  override def afterEach(): Unit =
+//    Thread.sleep(10000)
 
   "KSource" should {
 
@@ -46,7 +48,7 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -70,7 +72,7 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -108,7 +110,7 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -152,7 +154,7 @@ class KSourceIntegrationSpec
       val mappedValueMessages = messages.map(m => (m._1, mapFunction(m._2)))
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -176,9 +178,9 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -210,9 +212,9 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -249,9 +251,9 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -297,9 +299,9 @@ class KSourceIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 

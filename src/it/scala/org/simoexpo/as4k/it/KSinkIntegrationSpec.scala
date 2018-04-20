@@ -11,6 +11,8 @@ import org.simoexpo.as4k.model.{KRecord, KRecordMetadata}
 import org.simoexpo.as4k.producer.{KafkaProducerOption, KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import org.simoexpo.as4k.{KSink, KSource}
 
+import scala.util.Try
+
 class KSinkIntegrationSpec
     extends BaseSpec
     with ActorSystemSpec
@@ -20,8 +22,8 @@ class KSinkIntegrationSpec
     with LooseIntegrationPatience {
 
   //Need these because apparently kafka is not always stopped properly
-  override def afterEach(): Unit =
-    Thread.sleep(10000)
+//  override def afterEach(): Unit =
+//    Thread.sleep(10000)
 
   "KSink" should {
 
@@ -44,7 +46,7 @@ class KSinkIntegrationSpec
     "allow to produce message individually with a simple producer" in {
 
       withRunningKafka {
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -65,7 +67,7 @@ class KSinkIntegrationSpec
     "allow to produce a sequence of message with a transactional producer" in {
 
       withRunningKafka {
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -90,9 +92,9 @@ class KSinkIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
@@ -136,9 +138,9 @@ class KSinkIntegrationSpec
       }
 
       withRunningKafka {
-        createCustomTopic(inputTopic)
+        Try(createCustomTopic(inputTopic))
 
-        createCustomTopic(outputTopic)
+        Try(createCustomTopic(outputTopic))
 
         implicit val serializer: StringSerializer = new StringSerializer
 
