@@ -19,15 +19,9 @@ class KSourceIntegrationSpec
     with ScalaFutures
     with LooseIntegrationPatience {
 
-  //Need this because apparently kafka is not always stopped properly
-  override def afterEach(): Unit = {
-    EmbeddedKafka.stopKafka()
-    EmbeddedKafka.stopZooKeeper()
-    EmbeddedKafka.stop()
-    while (EmbeddedKafka.isRunning) {
-      Thread.sleep(1000)
-    }
-  }
+  //Need these because apparently kafka is not always stopped properly
+  override def afterEach(): Unit =
+    Thread.sleep(10000)
 
   "KSource" should {
 
