@@ -6,5 +6,20 @@ jdk:
 scala:
   - 2.12.5
 
+sudo: false
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt
+
+before_cache:
+  # Cleanup the cached directories to avoid unnecessary cache updates
+  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt        -name "*.lock"               -print -delete
+
 script:
-  - sbt test it:test
+  - sbt clean coverage test it:test && sbt coverageAggregate
+
+after_success:
+  - sbt coveralls

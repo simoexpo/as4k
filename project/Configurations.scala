@@ -11,8 +11,6 @@ object Configurations {
 
   lazy val stopKafka = taskKey[Unit]("Stop kafka in docker")
 
-  lazy val runBench = taskKey[Unit]("Benchmark2")
-
   lazy val benchmarkSettings =
     inConfig(Benchmark)(Defaults.compileSettings) ++
       Seq(
