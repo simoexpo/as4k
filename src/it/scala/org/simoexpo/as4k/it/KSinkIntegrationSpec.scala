@@ -19,7 +19,13 @@ class KSinkIntegrationSpec
     with ScalaFutures
     with LooseIntegrationPatience {
 
-  override def afterEach(): Unit = Thread.sleep(5000)
+  override def afterEach(): Unit = {
+    EmbeddedKafka.stopKafka()
+    EmbeddedKafka.stopZooKeeper()
+    while (EmbeddedKafka.isRunning) {
+      Thread.sleep(1000)
+    }
+  }
 
   "KSink" should {
 
