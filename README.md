@@ -1,4 +1,4 @@
-# as4k [![Build Status](https://travis-ci.org/simoexpo/as4k.svg?branch=master)](https://travis-ci.org/simoexpo/as4k?branch=master) [![Coverage Status](https://coveralls.io/repos/github/simoexpo/as4k/badge.svg?branch=master)](https://coveralls.io/github/simoexpo/as4k?branch=master)
+# as4k [![Build Status](https://travis-ci.org/simoexpo/as4k.svg?branch=master)](https://travis-ci.org/simoexpo/as4k?branch=master) [![Coverage Status](https://coveralls.io/repos/github/simoexpo/as4k/badge.svg?branch=master)](https://coveralls.io/github/simoexpo/as4k?branch=master) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://raw.githubusercontent.com/simoexpo/as4k/master/LICENSE.txt)
 
 *A simple Akka Stream extension for Kafka*
 
