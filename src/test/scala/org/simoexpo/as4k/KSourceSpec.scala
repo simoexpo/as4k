@@ -8,7 +8,7 @@ import org.mockito.Mockito.{atLeast => invokedAtLeast, _}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.simoexpo.as4k.KSource._
-import org.simoexpo.as4k.consumer.KafkaConsumerActor.{ConsumerToken, KafkaCommitException}
+import org.simoexpo.as4k.consumer.KafkaConsumerActor.KafkaCommitException
 import org.simoexpo.as4k.consumer.KafkaConsumerAgent
 import org.simoexpo.as4k.model.KRecord
 import org.simoexpo.as4k.producer.KafkaProducerActor.KafkaProduceException
@@ -49,7 +49,7 @@ class KSourceSpec
         val totalRecordsSize = Seq(records1, records2, records3).map(_.size).sum
         val expectedRecords = Seq(records1, records2, records3).flatten
 
-        when(kafkaConsumerAgent.askForRecords(ConsumerToken))
+        when(kafkaConsumerAgent.askForRecords)
           .thenReturn(Future.successful(records1))
           .thenReturn(Future.successful(records2))
           .thenReturn(Future.successful(records3))
@@ -61,7 +61,7 @@ class KSourceSpec
           records.size shouldBe totalRecordsSize
           records.toList shouldBe expectedRecords
 
-          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords
 
         }
       }
@@ -73,7 +73,7 @@ class KSourceSpec
 
         val emptyRecords = List.empty[KRecord[Int, String]]
 
-        when(kafkaConsumerAgent.askForRecords(ConsumerToken))
+        when(kafkaConsumerAgent.askForRecords)
           .thenReturn(Future.successful(records1))
           .thenReturn(Future.successful(emptyRecords))
           .thenReturn(Future.successful(records2))
@@ -84,7 +84,7 @@ class KSourceSpec
           records.size shouldBe totalRecordsSize
           records.toList shouldBe expectedRecords
 
-          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords(ConsumerToken)
+          verify(kafkaConsumerAgent, invokedAtLeast(3)).askForRecords
 
         }
       }

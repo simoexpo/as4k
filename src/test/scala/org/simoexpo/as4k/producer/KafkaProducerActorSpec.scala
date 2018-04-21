@@ -80,7 +80,7 @@ class KafkaProducerActorSpec
         whenReady(kafkaProducerActor ? ProduceRecords(kRecords)) { _ =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+            verify(kafkaProducer).send(anyProducerRecordWith(record))
           }
           verify(kafkaProducer).commitTransaction()
         }
@@ -127,7 +127,7 @@ class KafkaProducerActorSpec
           exception shouldBe a[KafkaProduceException]
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+            verify(kafkaProducer).send(anyProducerRecordWith(record))
           }
           verify(kafkaProducer).commitTransaction()
           verify(kafkaProducer).abortTransaction()
@@ -142,12 +142,12 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]])).thenReturn(aRecordMetadataFuture)
 
         whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords)) { _ =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+            verify(kafkaProducer).send(anyProducerRecordWith(record))
           }
           verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer).commitTransaction()
@@ -159,13 +159,13 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]])).thenReturn(aRecordMetadataFuture)
         when(kafkaProducer.commitTransaction()).thenThrow(new RuntimeException("Something bad happened!"))
 
         whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+            verify(kafkaProducer).send(anyProducerRecordWith(record))
           }
           verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer).commitTransaction()
@@ -180,12 +180,11 @@ class KafkaProducerActorSpec
 
         when(kafkaProducerOption.isTransactional).thenReturn(true)
 
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull()))
-          .thenThrow(new RuntimeException("Something bad happened!"))
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]])).thenThrow(new RuntimeException("Something bad happened!"))
 
         whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
           verify(kafkaProducer).beginTransaction()
-          verify(kafkaProducer).send(any[ProducerRecord[Int, String]], isNull())
+          verify(kafkaProducer).send(any[ProducerRecord[Int, String]])
           verify(kafkaProducer, times(0)).sendOffsetsToTransaction(committableMetadata(kRecords.last),
                                                                    kRecords.last.metadata.consumedBy)
           verify(kafkaProducer, times(0)).commitTransaction()
@@ -201,12 +200,12 @@ class KafkaProducerActorSpec
 
         when(kafkaProducer.sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy))
           .thenThrow(new RuntimeException("Something bad happened!"))
-        when(kafkaProducer.send(any[ProducerRecord[Int, String]], isNull())).thenReturn(aRecordMetadataFuture)
+        when(kafkaProducer.send(any[ProducerRecord[Int, String]])).thenReturn(aRecordMetadataFuture)
 
         whenReady(kafkaProducerActor ? ProduceRecordsAndCommit(kRecords) failed) { exception =>
           verify(kafkaProducer).beginTransaction()
           kRecords.foreach { record =>
-            verify(kafkaProducer).send(anyProducerRecordWith(record), isNull())
+            verify(kafkaProducer).send(anyProducerRecordWith(record))
           }
           verify(kafkaProducer).sendOffsetsToTransaction(committableMetadata(kRecords.last), kRecords.last.metadata.consumedBy)
           verify(kafkaProducer, times(0)).commitTransaction()

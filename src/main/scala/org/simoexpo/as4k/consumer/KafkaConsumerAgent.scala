@@ -30,8 +30,8 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
 
   def stopConsumer: Future[Boolean] = gracefulStop(actor, timeout.duration, PoisonPill)
 
-  def askForRecords(token: ConsumerToken): Future[List[KRecord[K, V]]] =
-    (actor ? token).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
+  def askForRecords: Future[List[KRecord[K, V]]] =
+    (actor ? ConsumerToken).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
       case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
     }
 

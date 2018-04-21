@@ -13,12 +13,7 @@ object KSource {
 
   def fromKafkaConsumer[K, V](kafkaConsumerAgent: KafkaConsumerAgent[K, V])(
       implicit ec: ExecutionContext): Source[KRecord[K, V], Any] =
-    Source
-      .fromIterator(KafkaConsumerIterator.getKafkaIterator)
-      .mapAsync(1) { token =>
-        kafkaConsumerAgent.askForRecords(token)
-      }
-      .mapConcat(identity)
+    Source.fromIterator(KafkaConsumerIterator.createOne).mapAsync(1)(_ => kafkaConsumerAgent.askForRecords).mapConcat(identity)
 
   implicit class KRecordSourceConverter[K, V](stream: Source[KRecord[K, V], Any]) {
 

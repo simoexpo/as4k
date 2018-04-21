@@ -3,7 +3,6 @@ package org.simoexpo.as4k.it
 import akka.stream.scaladsl.Sink
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.ScalaFutures
 import org.simoexpo.as4k.KSource
 import org.simoexpo.as4k.KSource._
@@ -16,21 +15,16 @@ import scala.util.Try
 class KSourceIntegrationSpec
     extends BaseSpec
     with ActorSystemSpec
-    with BeforeAndAfterEach
     with EmbeddedKafka
     with ScalaFutures
     with LooseIntegrationPatience {
-
-  //Need these because apparently kafka is not always stopped properly
-//  override def afterEach(): Unit =
-//    Thread.sleep(10000)
 
   "KSource" should {
 
     val inputTopic = "in_topic"
     val outputTopic = "out_topic"
 
-    implicit val config = EmbeddedKafkaConfig(9092, 2181)
+    implicit val config: EmbeddedKafkaConfig = EmbeddedKafkaConfig(9092, 2181)
 
     val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(inputTopic), "my-consumer")
 
@@ -96,9 +90,10 @@ class KSourceIntegrationSpec
             .runWith(Sink.seq)
         } yield (firstResult, secondResult)
 
-        whenReady(resultFuture) { result =>
-          result._1.map(record => (record.key, record.value)) shouldBe messages.take(recordsSize / 2)
-          result._2.map(record => (record.key, record.value)) shouldBe messages.drop(recordsSize / 2)
+        whenReady(resultFuture) {
+          case (firstHalf, secondHalf) =>
+            firstHalf.map(record => (record.key, record.value)) shouldBe messages.take(recordsSize / 2)
+            secondHalf.map(record => (record.key, record.value)) shouldBe messages.drop(recordsSize / 2)
         }
       }
     }
@@ -136,9 +131,12 @@ class KSourceIntegrationSpec
             .runWith(Sink.seq)
         } yield (firstResult, secondResult)
 
-        whenReady(resultFuture) { result =>
-          result._1.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.take(recordsSize / 2)
-          result._2.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.drop(recordsSize / 2)
+        whenReady(resultFuture) {
+          case (firstHalf, secondHalf) =>
+            firstHalf.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.take(
+              recordsSize / 2)
+            secondHalf.flatMap(records => records.map(record => (record.key, record.value))) shouldBe messages.drop(
+              recordsSize / 2)
         }
       }
     }

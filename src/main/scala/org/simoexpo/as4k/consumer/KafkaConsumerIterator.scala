@@ -1,16 +1,14 @@
 package org.simoexpo.as4k.consumer
 
-import org.simoexpo.as4k.consumer.KafkaConsumerActor.ConsumerToken
-
-final private[as4k] class KafkaConsumerIterator extends Iterator[ConsumerToken] {
+final private[as4k] class KafkaConsumerIterator extends Iterator[Unit] {
 
   override def hasNext: Boolean = true
 
-  override def next(): ConsumerToken.type = ConsumerToken
+  override def next(): Unit = ()
 }
 
 private[as4k] object KafkaConsumerIterator {
 
-  def getKafkaIterator: () => KafkaConsumerIterator = () => new KafkaConsumerIterator
+  def createOne: () => KafkaConsumerIterator = () => new KafkaConsumerIterator
 
 }

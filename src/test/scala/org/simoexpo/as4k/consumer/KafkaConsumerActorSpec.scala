@@ -15,7 +15,6 @@ import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.simoexpo.as4k.consumer.KafkaConsumerActor._
-import org.simoexpo.as4k.model
 import org.simoexpo.as4k.model.KRecord
 import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
@@ -38,12 +37,12 @@ class KafkaConsumerActorSpec
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
   when(kafkaConsumerOption.groupId).thenReturn(consumerGroup)
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
+  when(kafkaConsumer.assignment()).thenReturn(Set.empty[TopicPartition].asJava)
+  when(kafkaConsumerOption.createOne()).thenReturn(kafkaConsumer)
 
   private val PollingTimeout = 200
 
-  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingTimeout) {
-    override protected val consumer = kafkaConsumer
-  }))
+  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingTimeout)))
 
   override def beforeEach(): Unit =
     reset(kafkaConsumer)

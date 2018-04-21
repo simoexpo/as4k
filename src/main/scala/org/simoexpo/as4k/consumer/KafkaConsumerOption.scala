@@ -29,8 +29,8 @@ object KafkaConsumerOption {
                   valueDeserializer: Option[Deserializer[V]] = None): KafkaConsumerOption[K, V] =
     pureconfig.loadConfig[ConsumerConf](config) match {
       case Right(conf) =>
-        val kafkaConsumerSetting = conf.consumerSetting.map { element =>
-          (element._1.replaceAll("-", "."), element._2)
+        val kafkaConsumerSetting = conf.consumerSetting.map {
+          case (key, value) => (key.replaceAll("-", "."), value)
         }
         new KafkaConsumerOption(topic, kafkaConsumerSetting, conf.dispatcher, keyDeserializer, valueDeserializer)
       case Left(ex) => throw new IllegalArgumentException(s"Cannot load consumer setting from $config: $ex")

@@ -3,7 +3,6 @@ package org.simoexpo.as4k.it
 import akka.stream.scaladsl.{Sink, Source}
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.ScalaFutures
 import org.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerOption}
 import org.simoexpo.as4k.it.testing.{ActorSystemSpec, BaseSpec, LooseIntegrationPatience}
@@ -16,14 +15,9 @@ import scala.util.Try
 class KSinkIntegrationSpec
     extends BaseSpec
     with ActorSystemSpec
-    with BeforeAndAfterEach
     with EmbeddedKafka
     with ScalaFutures
     with LooseIntegrationPatience {
-
-  //Need these because apparently kafka is not always stopped properly
-//  override def afterEach(): Unit =
-//    Thread.sleep(10000)
 
   "KSink" should {
 

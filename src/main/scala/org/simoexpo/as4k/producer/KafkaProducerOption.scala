@@ -29,8 +29,8 @@ object KafkaProducerOption {
                   valueSerializer: Option[Serializer[V]] = None): KafkaProducerOption[K, V] =
     pureconfig.loadConfig[ProducerConf](config) match {
       case Right(conf) =>
-        val kafkaProducerSetting = conf.producerSetting.map { element =>
-          (element._1.replaceAll("-", "."), element._2)
+        val kafkaProducerSetting = conf.producerSetting.map {
+          case (key, value) => (key.replaceAll("-", "."), value)
         }
         new KafkaProducerOption(topic, kafkaProducerSetting, conf.dispatcher, keySerializer, valueSerializer)
       case Left(ex) => throw new IllegalArgumentException(s"Cannot load producer setting from $config: $ex")

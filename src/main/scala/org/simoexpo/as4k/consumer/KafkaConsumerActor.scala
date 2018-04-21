@@ -56,9 +56,9 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
     case CommitOffsets(records, customCallback) =>
       records match {
         case Nil => sender() ! Done
-        case recordsList =>
-          commitRecord(self, sender(), recordsList.last.asInstanceOf[KRecord[K, V]], customCallback).map { _ =>
-            addPendingCommit(sender(), recordsList.last.asInstanceOf[KRecord[K, V]])
+        case _ :+ last =>
+          commitRecord(self, sender(), last.asInstanceOf[KRecord[K, V]], customCallback).map { _ =>
+            addPendingCommit(sender(), last.asInstanceOf[KRecord[K, V]])
           }.recover {
             case NonFatal(ex) => sender() ! Status.Failure(KafkaCommitException(ex))
           }
@@ -135,13 +135,9 @@ private[as4k] object KafkaConsumerActor {
   sealed trait KafkaConsumerMessage
 
   case object ConsumerToken extends KafkaConsumerMessage
-  type ConsumerToken = ConsumerToken.type
-
   case class CommitOffsets[K, V](record: Seq[KRecord[K, V]], callback: Option[CustomCommitCallback] = None)
       extends KafkaConsumerMessage
   case class Subscribe(topics: Seq[String]) extends KafkaConsumerMessage
-  case class StartCommit[K, V](originalSender: ActorRef, record: KRecord[K, V], callback: Option[CustomCommitCallback] = None)
-      extends KafkaConsumerMessage
   case object PollToCommit extends KafkaConsumerMessage
   case object CommitComplete extends KafkaConsumerMessage
 
@@ -151,8 +147,6 @@ private[as4k] object KafkaConsumerActor {
 
   case class KafkaCommitTimeoutException[K, V](record: KRecord[K, V], timeout: Long)
       extends RuntimeException(s"Timeout Exception during the commit of $record: it took more than $timeout ms")
-
-  case class CommitOperation[K, V](sender: ActorRef, record: KRecord[K, V], timestamp: Long)
 
   def props[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long): Props =
     Props(new KafkaConsumerActor(consumerOption, pollingTimeout))

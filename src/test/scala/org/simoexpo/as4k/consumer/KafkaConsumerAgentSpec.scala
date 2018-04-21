@@ -47,7 +47,7 @@ class KafkaConsumerAgentSpec
 
       "retrieve new records" in {
 
-        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords
 
         kafkaConsumerActor.expectMsg(ConsumerToken)
         kafkaConsumerActor.reply(kRecords)
@@ -59,7 +59,7 @@ class KafkaConsumerAgentSpec
 
       "fail with a KafkaPollingException if the consumer actor fails" in {
 
-        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords
 
         kafkaConsumerActor.expectMsg(ConsumerToken)
         kafkaConsumerActor.reply(
@@ -72,7 +72,7 @@ class KafkaConsumerAgentSpec
 
       "fail with a KafkaConsumerTimeoutException if the no response are given before the timeout" in {
 
-        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords(ConsumerToken)
+        val recordsConsumedFuture = kafkaConsumerAgent.askForRecords
 
         kafkaConsumerActor.expectMsg(ConsumerToken)
 
@@ -157,7 +157,7 @@ class KafkaConsumerAgentSpec
       "allow to close the consumer actor properly" in {
 
         whenReady(kafkaConsumerAgent.stopConsumer) { _ =>
-          val exception = kafkaConsumerAgent.askForRecords(ConsumerToken).failed.futureValue
+          val exception = kafkaConsumerAgent.askForRecords.failed.futureValue
           exception shouldBe an[KafkaConsumerTimeoutException]
           exception.getMessage should include("had already been terminated")
         }

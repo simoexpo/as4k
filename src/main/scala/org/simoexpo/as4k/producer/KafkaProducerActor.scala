@@ -76,7 +76,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
   private def produceInTransaction(records: Seq[KRecord[K, V]], commit: Boolean = false): Try[Unit] =
     Try {
       producer.beginTransaction()
-      records.foreach(record => producer.send(new ProducerRecord(topic, record.key, record.value), null))
+      records.foreach(record => producer.send(new ProducerRecord(topic, record.key, record.value)))
       if (commit && records.nonEmpty)
         producer.sendOffsetsToTransaction(committableMetadata(records.last), records.last.metadata.consumedBy)
       producer.commitTransaction()
