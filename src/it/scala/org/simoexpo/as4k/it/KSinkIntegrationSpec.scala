@@ -44,7 +44,7 @@ class KSinkIntegrationSpec
 
         implicit val serializer: StringSerializer = new StringSerializer
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
 
@@ -65,7 +65,7 @@ class KSinkIntegrationSpec
 
         implicit val serializer: StringSerializer = new StringSerializer
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
@@ -94,16 +94,16 @@ class KSinkIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)), 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)), 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
         val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
         val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
@@ -140,16 +140,16 @@ class KSinkIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)), 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)), 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
         val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
         val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 

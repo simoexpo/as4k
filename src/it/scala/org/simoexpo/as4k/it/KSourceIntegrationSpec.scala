@@ -48,7 +48,7 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
@@ -72,9 +72,9 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val resultFuture = for {
           firstResult <- KSource
@@ -111,9 +111,9 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val resultFuture = for {
           firstResult <- KSource
@@ -149,7 +149,9 @@ class KSourceIntegrationSpec
 
       val mapFunction: String => String = (s: String) => s + "mapped"
 
-      val mappedValueMessages = messages.map(m => (m._1, mapFunction(m._2)))
+      val mappedValueMessages = messages.map {
+        case (key, value) => (key, mapFunction(value))
+      }
 
       withRunningKafka {
         Try(createCustomTopic(inputTopic))
@@ -158,7 +160,7 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val result = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).mapValue(mapFunction).runWith(Sink.seq)
 
@@ -184,14 +186,14 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
 
         val kafkaConsumerOptionTwo: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-other-consumer")
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOptionTwo, 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOptionTwo)
 
         KSource.fromKafkaConsumer(kafkaConsumerAgentOne).take(recordsSize).produce(3)(kafkaProducerAgent).runWith(Sink.ignore)
         val resultFuture = KSource.fromKafkaConsumer(kafkaConsumerAgentTwo).take(recordsSize).runWith(Sink.seq)
@@ -218,14 +220,14 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
         val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
         KSource
           .fromKafkaConsumer(kafkaConsumerAgentOne)
@@ -257,16 +259,16 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
         val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
         val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
@@ -305,16 +307,16 @@ class KSourceIntegrationSpec
 
         publishToKafka(inputTopic, messages)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
 
         val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
 
         val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
           KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
 
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption, 100)
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
         val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 

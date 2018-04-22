@@ -52,7 +52,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
   private def simpleConsumerBenchmark: Future[Unit] = {
     val benchName = "Simple Consumer"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(inTopic), "my-simple-consumer")
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val bench = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
@@ -70,7 +70,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val benchName = "Simple Consumer with Commit"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-with-commit")
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val bench = KSource.fromKafkaConsumer(kafkaConsumerAgent).commit(3)(kafkaConsumerAgent).take(recordsSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
@@ -88,7 +88,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val benchName = "Simple Consumer with Batch Commit"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-with-batch-commit")
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val batchSize = 1000
     val bench =
       KSource.fromKafkaConsumer(kafkaConsumerAgent).grouped(batchSize).commit(3)(kafkaConsumerAgent).take(recordsSize / batchSize)
@@ -109,7 +109,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-two")
     val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption(outTopic, "my-simple-producer")
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
     val bench =
       KSource.fromKafkaConsumer(kafkaConsumerAgent).produce(100)(kafkaProducerAgent).take(recordsSize)
@@ -133,7 +133,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
       KafkaProducerOption(outTopic, "my-transactional-producer")
     val batchSize = 100
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
     val bench =
       KSource.fromKafkaConsumer(kafkaConsumerAgent).grouped(batchSize).produce(kafkaProducerAgent).take(recordsSize / batchSize)
@@ -157,7 +157,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
       KafkaProducerOption(outTopic, "my-transactional-producer")
     val batchSize = 100
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 100)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
     val bench =
       KSource

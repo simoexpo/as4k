@@ -11,8 +11,7 @@ import org.simoexpo.as4k.model.KRecord
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 
-class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long)(implicit actorSystem: ActorSystem,
-                                                                                                timeout: Timeout) {
+class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V])(implicit actorSystem: ActorSystem, timeout: Timeout) {
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
   val consumerGroup: String = consumerOption.groupId
@@ -21,9 +20,9 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], pollin
   protected val actor: ActorRef = {
     val props = dispatcherConfig match {
       case Some(dispatcher) =>
-        KafkaConsumerActor.props(consumerOption, pollingTimeout).withDispatcher(dispatcher)
+        KafkaConsumerActor.props(consumerOption).withDispatcher(dispatcher)
       case None =>
-        KafkaConsumerActor.props(consumerOption, pollingTimeout)
+        KafkaConsumerActor.props(consumerOption)
     }
     actorSystem.actorOf(props)
   }

@@ -7,7 +7,6 @@ import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 
 trait KafkaManagerUtility {
 
@@ -20,17 +19,9 @@ trait KafkaManagerUtility {
 
   private val adminClient = AdminClient.create(props)
 
-  def createSimpleTopics(topics: Seq[String])(implicit ec: ExecutionContext): Future[Unit] = {
-
+  def createSimpleTopics(topics: Seq[String])(implicit ec: ExecutionContext): Future[Unit] = Future {
     val newTopics = topics.map(topicName => new NewTopic(topicName, 1, 1)).asJava
-
-    for {
-      _ <- Future(adminClient.deleteTopics(topics.asJava).all().get()).recoverWith {
-        case NonFatal(_) => Future.unit
-      }
-      _ <- Future(adminClient.createTopics(newTopics).all().get())
-    } yield ()
-
+    adminClient.createTopics(newTopics).all().get()
   }
 
 }

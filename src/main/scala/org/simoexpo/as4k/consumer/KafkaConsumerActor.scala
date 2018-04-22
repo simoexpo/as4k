@@ -15,7 +15,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 
-private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long)
+private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption[K, V])
     extends Actor
     with Stash
     with ActorLogging {
@@ -44,7 +44,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
       Try {
         consumer.resume(consumerAssignment)
         consumer
-          .poll(pollingTimeout)
+          .poll(consumerOption.pollingTimeout)
           .iterator()
           .asScala
           .map(consumedRecord => KRecord(consumedRecord, consumerOption.groupId))
@@ -148,7 +148,7 @@ private[as4k] object KafkaConsumerActor {
   case class KafkaCommitTimeoutException[K, V](record: KRecord[K, V], timeout: Long)
       extends RuntimeException(s"Timeout Exception during the commit of $record: it took more than $timeout ms")
 
-  def props[K, V](consumerOption: KafkaConsumerOption[K, V], pollingTimeout: Long): Props =
-    Props(new KafkaConsumerActor(consumerOption, pollingTimeout))
+  def props[K, V](consumerOption: KafkaConsumerOption[K, V]): Props =
+    Props(new KafkaConsumerActor(consumerOption))
 
 }

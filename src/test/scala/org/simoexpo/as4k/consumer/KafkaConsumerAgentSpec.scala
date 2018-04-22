@@ -22,20 +22,20 @@ class KafkaConsumerAgentSpec
   val groupId = "groupId"
   val topic = "topic"
   val partition = 1
+  private val pollingTimeout = 200
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   when(kafkaConsumerOption.groupId).thenReturn(groupId)
   when(kafkaConsumerOption.dispatcher).thenReturn(None)
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
   when(kafkaConsumerOption.createOne()).thenReturn(mock[KafkaConsumer[Int, String]])
+  when(kafkaConsumerOption.pollingTimeout).thenReturn(pollingTimeout)
 
   private val kafkaConsumerActor: TestProbe = TestProbe()
   private val kafkaConsumerActorRef: ActorRef = kafkaConsumerActor.ref
 
-  private val PollingTimeout = 200
-
   private val kafkaConsumerAgent: KafkaConsumerAgent[Int, String] =
-    new KafkaConsumerAgent(kafkaConsumerOption, PollingTimeout)(system, timeout) {
+    new KafkaConsumerAgent(kafkaConsumerOption)(system, timeout) {
       override val actor: ActorRef = kafkaConsumerActorRef
     }
 

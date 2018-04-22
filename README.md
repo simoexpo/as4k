@@ -17,7 +17,7 @@ as4k is a simple Akka Stream extension that aims to simplify the integration wit
 
 as4k provides some simple classes to consume messages from a Kafka topic (`KafkaConsumerAgent`) and to produce messages to a topic (`KafkaSimpleProducerAgent` and `KafkaTransactionalProducerAgent`).
 
-In addition it provides some utilities to create streams `Source` from `KafkaConsumerAgent` and streams `Sink` from a `KafkaSimpleProducerAgent` (or `KafkaTransactionalProducerAgent`)
+In addition it provides some utilities to create Akka Streams `Source` from `KafkaConsumerAgent` and `Sink` from a `KafkaSimpleProducerAgent` (or `KafkaTransactionalProducerAgent`)
 
 ### KafkaConsumerAgent
 

@@ -32,17 +32,17 @@ class KafkaConsumerActorSpec
   val topic = "topic"
   val partition = 1
   val consumerGroup = "defaultGroup"
+  private val pollingTimeout = 200
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
   when(kafkaConsumerOption.groupId).thenReturn(consumerGroup)
+  when(kafkaConsumerOption.pollingTimeout).thenReturn(pollingTimeout)
   private val kafkaConsumer: KafkaConsumer[Int, String] = mock[KafkaConsumer[Int, String]]
   when(kafkaConsumer.assignment()).thenReturn(Set.empty[TopicPartition].asJava)
   when(kafkaConsumerOption.createOne()).thenReturn(kafkaConsumer)
 
-  private val PollingTimeout = 200
-
-  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption, PollingTimeout)))
+  private val kafkaConsumerActor = system.actorOf(Props(new KafkaConsumerActor(kafkaConsumerOption)))
 
   override def beforeEach(): Unit =
     reset(kafkaConsumer)
@@ -60,7 +60,7 @@ class KafkaConsumerActorSpec
         val expectedKRecords =
           consumerRecords.iterator().asScala.map(record => KRecord(record, consumerGroup)).toList
 
-        when(kafkaConsumer.poll(PollingTimeout)).thenReturn(consumerRecords)
+        when(kafkaConsumer.poll(pollingTimeout)).thenReturn(consumerRecords)
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
@@ -71,7 +71,7 @@ class KafkaConsumerActorSpec
 
       "fail with a KafkaPollingException if the kafka consumer fails" in {
 
-        when(kafkaConsumer.poll(PollingTimeout)).thenThrow(new RuntimeException("something bad happened!"))
+        when(kafkaConsumer.poll(pollingTimeout)).thenThrow(new RuntimeException("something bad happened!"))
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
