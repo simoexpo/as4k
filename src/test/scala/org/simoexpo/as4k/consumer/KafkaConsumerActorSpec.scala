@@ -30,7 +30,7 @@ class KafkaConsumerActorSpec
     with DataHelperSpec {
 
   val topic = "topic"
-  val partition = 1
+  val partitions = 3
   val consumerGroup = "defaultGroup"
   private val pollingTimeout = 200
 
@@ -49,13 +49,19 @@ class KafkaConsumerActorSpec
 
   "KafkaConsumerActor" when {
 
-    val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n", topic, partition)).toList
+    val records = Range(0, 100).map(n => aConsumerRecord(n, n, s"value$n", topic, n % partitions)).toList
 
     "polling for new records" should {
 
       "get the records from kafka consumer" in {
 
-        val consumerRecords = new ConsumerRecords(Map((new TopicPartition(topic, partition), records.asJava)).asJava)
+        val consumerRecords = new ConsumerRecords(
+          records
+            .groupBy(_.partition())
+            .map {
+              case (partition, recordList) => (new TopicPartition(topic, partition), recordList.asJava)
+            }
+            .asJava)
 
         val expectedKRecords =
           consumerRecords.iterator().asScala.map(record => KRecord(record, consumerGroup)).toList
@@ -98,7 +104,7 @@ class KafkaConsumerActorSpec
         }
       }
 
-      "commitAsync the offset of the last record in a seq, start polling until callback response and return if success" in {
+      "commitAsync the offset for each partition, start polling until callback response and return if success" in {
 
         val kRecords = records.map(record => KRecord(record, consumerGroup))
 
@@ -116,13 +122,13 @@ class KafkaConsumerActorSpec
         val commitResult = kafkaConsumerActor ? CommitOffsets(kRecords, Some(callback))
 
         whenReady(commitResult) { _ =>
-          val topicAndOffset = committableMetadata(kRecords.last)
+          val topicAndOffset = getOffsetsAndPartitions(kRecords)
           verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
           verify(kafkaConsumer, invokedAtLeast(1)).poll(0)
         }
       }
 
-      "commitAsync the offset of the last record in a seq, start polling until callback response and return if failure" in {
+      "commitAsync the offset for each partition, start polling until callback response and return if failure" in {
 
         val kRecords = records.map(record => KRecord(record, consumerGroup))
 
@@ -141,7 +147,7 @@ class KafkaConsumerActorSpec
         val commitResult = kafkaConsumerActor ? CommitOffsets(kRecords, Some(callback))
 
         whenReady(commitResult.failed) { exception =>
-          val topicAndOffset = committableMetadata(kRecords.last)
+          val topicAndOffset = getOffsetsAndPartitions(kRecords)
           verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
           verify(kafkaConsumer, invokedAtLeast(1)).poll(0)
           exception shouldBe a[KafkaCommitException]

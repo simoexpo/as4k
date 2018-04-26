@@ -141,6 +141,46 @@ class KSourceIntegrationSpec
       }
     }
 
+    "allow to commit a sequence of message in a multi-partition topic" in {
+
+      val messages = Range(0, recordsSize).map { n =>
+        (n.toString, n.toString)
+      }
+
+      withRunningKafka {
+        Try(createCustomTopic(topic = inputTopic, partitions = 3))
+
+        implicit val serializer: StringSerializer = new StringSerializer
+
+        publishToKafka(inputTopic, messages)
+
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
+
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
+
+        val resultFuture = for {
+          firstResult <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentOne)
+            .take(recordsSize / 2)
+            .grouped(10)
+            .commit(3)(kafkaConsumerAgentOne)
+            .runWith(Sink.seq)
+          _ <- kafkaConsumerAgentOne.stopConsumer
+          secondResult <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentTwo)
+            .take(recordsSize / 2)
+            .grouped(10)
+            .commit(3)(kafkaConsumerAgentTwo)
+            .runWith(Sink.seq)
+        } yield (firstResult, secondResult)
+
+        whenReady(resultFuture) {
+          case (firstHalf, secondHalf) =>
+            (firstHalf.flatten ++ secondHalf.flatten).map(record => (record.key, record.value)).toSet shouldBe messages.toSet
+        }
+      }
+    }
+
     "allow to map value of messages" in {
 
       val messages = Range(0, recordsSize).map { n =>
@@ -338,6 +378,57 @@ class KSourceIntegrationSpec
 
         whenReady(consumedRecords) { consumedMessages =>
           consumedMessages.map(record => (record.key, record.value)) shouldBe messages
+        }
+      }
+
+    }
+
+    "allow to produce and commit a sequence of message in a transaction with a transactional producer in a multi-partition topic" in {
+
+      val messages = Range(0, recordsSize).map { n =>
+        (n.toString, n.toString)
+      }
+
+      withRunningKafka {
+        Try(createCustomTopic(topic = inputTopic, partitions = 3))
+
+        Try(createCustomTopic(outputTopic))
+
+        implicit val serializer: StringSerializer = new StringSerializer
+
+        publishToKafka(inputTopic, messages)
+
+        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption)
+
+        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption)
+
+        val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
+
+        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
+          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
+
+        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
+
+        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
+
+        for {
+          _ <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentOne)
+            .take(recordsSize / 2)
+            .grouped(10)
+            .produceAndCommit(kafkaProducerAgent)
+            .runWith(Sink.ignore)
+          _ <- kafkaConsumerAgentOne.stopConsumer
+          _ <- KSource
+            .fromKafkaConsumer(kafkaConsumerAgentTwo)
+            .take(recordsSize / 2)
+            .grouped(10)
+            .produceAndCommit(kafkaProducerAgent)
+            .runWith(Sink.ignore)
+        } yield ()
+
+        whenReady(consumedRecords) { consumedMessages =>
+          consumedMessages.map(record => (record.key, record.value)).toSet shouldBe messages.toSet
         }
       }
 

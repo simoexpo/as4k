@@ -36,9 +36,9 @@ class KafkaTransactionalProducerAgentSpec
   "KafkaTransactionalProducerAgent" when {
 
     val topic = "topic"
-    val partition = 1
+    val partitions = 3
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, "defaultGroup")).toList
 
     "producing records" should {
 

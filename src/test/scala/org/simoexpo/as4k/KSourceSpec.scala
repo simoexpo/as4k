@@ -36,11 +36,11 @@ class KSourceSpec
   "KSource" when {
 
     val topic = "topic"
-    val partition = 1
+    val partitions = 3
 
-    val records1 = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
-    val records2 = Range(100, 200).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
-    val records3 = Range(200, 220).map(n => aKRecord(n, n, s"value$n", topic, partition, "defaultGroup")).toList
+    val records1 = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, "defaultGroup")).toList
+    val records2 = Range(100, 200).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, "defaultGroup")).toList
+    val records3 = Range(200, 220).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, "defaultGroup")).toList
 
     "producing a source of KRecord" should {
 

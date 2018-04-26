@@ -78,7 +78,7 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
       producer.beginTransaction()
       records.foreach(record => producer.send(new ProducerRecord(topic, record.key, record.value)))
       if (commit && records.nonEmpty)
-        producer.sendOffsetsToTransaction(committableMetadata(records.last), records.last.metadata.consumedBy)
+        producer.sendOffsetsToTransaction(getOffsetsAndPartitions(records), records.head.metadata.consumedBy)
       producer.commitTransaction()
       sender() ! Done
     }.recover {
@@ -88,10 +88,15 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
         sender() ! Status.Failure(KafkaProduceException(ex))
     }
 
-  protected def committableMetadata(record: KRecord[K, V]): util.Map[TopicPartition, OffsetAndMetadata] = {
-    val topicPartition = new TopicPartition(record.metadata.topic, record.metadata.partition)
-    val offsetAndMetadata = new OffsetAndMetadata(record.metadata.offset + 1)
-    Map(topicPartition -> offsetAndMetadata).asJava
+  private def getOffsetsAndPartitions(records: Seq[KRecord[K, V]]): util.Map[TopicPartition, OffsetAndMetadata] = {
+    val groupedRecords = records.groupBy(_.metadata.partition)
+    groupedRecords.map {
+      case (_, Nil) => None
+      case (partition, _ :+ lastRecord) =>
+        val topicPartition = new TopicPartition(lastRecord.metadata.topic, partition)
+        val offsetAndMetadata = new OffsetAndMetadata(lastRecord.metadata.offset + 1)
+        Some(topicPartition -> offsetAndMetadata)
+    }.flatten.toMap.asJava
   }
 
   override def postStop(): Unit = {

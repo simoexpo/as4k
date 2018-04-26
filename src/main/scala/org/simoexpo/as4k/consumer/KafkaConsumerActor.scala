@@ -56,9 +56,9 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
     case CommitOffsets(records, customCallback) =>
       records match {
         case Nil => sender() ! Done
-        case _ :+ last =>
-          commitRecord(self, sender(), last.asInstanceOf[KRecord[K, V]], customCallback).map { _ =>
-            addPendingCommit(sender(), last.asInstanceOf[KRecord[K, V]])
+        case recordsList =>
+          commitRecord(self, sender(), recordsList.asInstanceOf[Seq[KRecord[K, V]]], customCallback).map { _ =>
+            addPendingCommit()
           }.recover {
             case NonFatal(ex) => sender() ! Status.Failure(KafkaCommitException(ex))
           }
@@ -83,10 +83,15 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
     assignment
   }
 
-  private def committableMetadata(record: KRecord[K, V]) = {
-    val topicPartition = new TopicPartition(record.metadata.topic, record.metadata.partition)
-    val offsetAndMetadata = new OffsetAndMetadata(record.metadata.offset + 1)
-    Map(topicPartition -> offsetAndMetadata).asJava
+  private def getOffsetsAndPartitions(records: Seq[KRecord[K, V]]): util.Map[TopicPartition, OffsetAndMetadata] = {
+    val groupedRecords = records.groupBy(_.metadata.partition)
+    groupedRecords.map {
+      case (_, Nil) => None
+      case (partition, _ :+ lastRecord) =>
+        val topicPartition = new TopicPartition(lastRecord.metadata.topic, partition)
+        val offsetAndMetadata = new OffsetAndMetadata(lastRecord.metadata.offset + 1)
+        Some(topicPartition -> offsetAndMetadata)
+    }.flatten.toMap.asJava
   }
 
   private def commitCallback(consumerActor: ActorRef, originalSender: ActorRef, customCallback: Option[CustomCommitCallback]) =
@@ -106,15 +111,15 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 
   private def commitRecord(consumerActor: ActorRef,
                            originalSender: ActorRef,
-                           record: KRecord[K, V],
+                           records: Seq[KRecord[K, V]],
                            customCallback: Option[CustomCommitCallback]) =
     Try {
-      val offset = committableMetadata(record)
+      val offsets = getOffsetsAndPartitions(records)
       val callback = commitCallback(consumerActor, originalSender, customCallback)
-      consumer.commitAsync(offset, callback)
+      consumer.commitAsync(offsets, callback)
     }
 
-  private def addPendingCommit(sender: ActorRef, record: KRecord[K, V]): Unit = {
+  private def addPendingCommit(): Unit = {
     if (pendingCommit == 0) {
       self ! PollToCommit
     }

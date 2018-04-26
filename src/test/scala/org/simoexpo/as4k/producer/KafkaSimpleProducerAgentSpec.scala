@@ -36,7 +36,7 @@ class KafkaSimpleProducerAgentSpec
   "KafkaSimpleProducerAgent" when {
 
     val topic = "topic"
-    val partition = 1
+    val partition = 0
 
     val kRecord = aKRecord(0, 0, "value0", topic, partition, "defaultGroup")
 

@@ -21,7 +21,7 @@ class KafkaConsumerAgentSpec
 
   val groupId = "groupId"
   val topic = "topic"
-  val partition = 1
+  val partitions = 3
   private val pollingTimeout = 200
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
@@ -41,7 +41,7 @@ class KafkaConsumerAgentSpec
 
   "KafkaConsumerAgent" when {
 
-    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, partition, groupId)).toList
+    val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, groupId)).toList
 
     "asking the consumer actor to poll" should {
 

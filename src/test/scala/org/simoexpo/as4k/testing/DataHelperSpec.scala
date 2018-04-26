@@ -25,10 +25,15 @@ trait DataHelperSpec {
     KRecord(key, value, metadata)
   }
 
-  protected def committableMetadata[K, V](record: KRecord[K, V]): util.Map[TopicPartition, OffsetAndMetadata] = {
-    val topicPartition = new TopicPartition(record.metadata.topic, record.metadata.partition)
-    val offsetAndMetadata = new OffsetAndMetadata(record.metadata.offset + 1)
-    Map(topicPartition -> offsetAndMetadata).asJava
+  protected def getOffsetsAndPartitions[K, V](records: Seq[KRecord[K, V]]): util.Map[TopicPartition, OffsetAndMetadata] = {
+    val groupedRecords = records.groupBy(_.metadata.partition)
+    groupedRecords.map {
+      case (_, Nil) => None
+      case (partition, _ :+ lastRecord) =>
+        val topicPartition = new TopicPartition(lastRecord.metadata.topic, partition)
+        val offsetAndMetadata = new OffsetAndMetadata(lastRecord.metadata.offset + 1)
+        Some(topicPartition -> offsetAndMetadata)
+    }.flatten.toMap.asJava
   }
 
   protected def aRecordMetadataFuture: JavaFuture[RecordMetadata] =
