@@ -4,11 +4,11 @@ jdk:
   - oraclejdk8
 
 scala:
-  - 2.12.5
+  - 2.12.6
 
 sudo: false
 
-cache:
+cache: 
   directories:
     - $HOME/.ivy2/cache
     - $HOME/.sbt
