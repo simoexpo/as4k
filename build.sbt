@@ -6,7 +6,7 @@ parallelExecution in IntegrationTest := false
 
 organization := "com.github.simoexpo"
 
-scalaVersion := "2.12.5"
+scalaVersion := "2.12.6"
 
 libraryDependencies ++= Seq(scalaTest, kafka, mockito, embeddedKafka, pureConfig) ++ akkaStream
 

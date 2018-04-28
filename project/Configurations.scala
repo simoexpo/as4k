@@ -1,5 +1,5 @@
 import sbt._
-import sbt.Keys.{baseDirectory, fork, parallelExecution, scalaSource, resourceDirectory, run}
+import sbt.Keys.{baseDirectory, fork, parallelExecution, resourceDirectory, scalaSource}
 import sbt.librarymanagement.Configuration
 import scala.sys.process._
 
