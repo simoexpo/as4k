@@ -4,7 +4,7 @@ import Configurations._
 parallelExecution in Test := false
 parallelExecution in IntegrationTest := false
 
-organization := "com.github.simoexpo"
+organization := "org.simoexpo"
 
 scalaVersion := "2.12.8"
 
