@@ -1,12 +1,15 @@
 package org.simoexpo.as4k.consumer
 
+import java.time.Duration
+
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.Deserializer
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 
 case class KafkaConsumerOption[K, V] private (topics: Seq[String],
-                                              pollingTimeout: Long,
+                                              pollingTimeout: FiniteDuration,
                                               consumerSetting: Map[String, String],
                                               dispatcher: Option[String],
                                               keyDeserializer: Option[Deserializer[K]],
@@ -24,9 +27,13 @@ case class KafkaConsumerOption[K, V] private (topics: Seq[String],
 
 object KafkaConsumerOption {
 
+  import pureconfig.generic.auto._
+  import scala.concurrent.duration._
+  import scala.language.postfixOps
+
   def apply[K, V](topic: Seq[String],
                   config: String,
-                  pollingTimeout: Long = 100,
+                  pollingTimeout: FiniteDuration = 100 millis,
                   keyDeserializer: Option[Deserializer[K]] = None,
                   valueDeserializer: Option[Deserializer[V]] = None): KafkaConsumerOption[K, V] =
     pureconfig.loadConfig[ConsumerConf](config) match {

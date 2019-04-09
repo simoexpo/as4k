@@ -23,6 +23,8 @@ case class KafkaProducerOption[K, V](topic: String,
 
 object KafkaProducerOption {
 
+  import pureconfig.generic.auto._
+
   def apply[K, V](topic: String,
                   config: String,
                   keySerializer: Option[Serializer[K]] = None,

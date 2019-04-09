@@ -24,7 +24,7 @@ class KSinkIntegrationSpec
     val inputTopic = "in_topic"
     val outputTopic = "out_topic"
 
-    implicit val config: EmbeddedKafkaConfig = EmbeddedKafkaConfig(9092, 2181)
+    implicit val config: EmbeddedKafkaConfig = EmbeddedKafkaConfig(kafkaPort = 9092, zooKeeperPort = 2181)
 
     val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer")
 

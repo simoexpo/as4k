@@ -11,6 +11,9 @@ import org.simoexpo.as4k.consumer.KafkaConsumerActor._
 import org.simoexpo.as4k.consumer.KafkaConsumerAgent.KafkaConsumerTimeoutException
 import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
+import scala.concurrent.duration._
+import scala.language.postfixOps
+
 class KafkaConsumerAgentSpec
     extends BaseSpec
     with ScalaFutures
@@ -22,7 +25,7 @@ class KafkaConsumerAgentSpec
   val groupId = "groupId"
   val topic = "topic"
   val partitions = 3
-  private val pollingTimeout = 200
+  private val pollingTimeout = 200 millis
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   when(kafkaConsumerOption.groupId).thenReturn(groupId)

@@ -1,5 +1,6 @@
 package org.simoexpo.as4k.consumer
 
+import java.time.Duration
 import java.util
 import java.util.concurrent.TimeUnit
 
@@ -44,7 +45,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
       Try {
         consumer.resume(consumerAssignment)
         consumer
-          .poll(consumerOption.pollingTimeout)
+          .poll(Duration.ofMillis(consumerOption.pollingTimeout.toMillis))
           .iterator()
           .asScala
           .map(consumedRecord => KRecord(consumedRecord, consumerOption.groupId))
@@ -66,7 +67,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 
     case PollToCommit if pendingCommit > 0 =>
       consumer.pause(consumerAssignment)
-      consumer.poll(0)
+      consumer.poll(Duration.ZERO)
       self ! PollToCommit
 
     case PollToCommit => ()
@@ -129,7 +130,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
 
   override def postStop(): Unit = {
     log.info(s"Terminating consumer...")
-    consumer.close(1000, TimeUnit.MILLISECONDS)
+    consumer.close(Duration.ofMillis(1000))
     super.postStop()
   }
 

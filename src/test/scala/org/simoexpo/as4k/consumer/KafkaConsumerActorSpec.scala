@@ -20,6 +20,9 @@ import org.simoexpo.as4k.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import scala.concurrent.duration._
+import java.time.{Duration => JavaDuration}
+import scala.language.postfixOps
 
 class KafkaConsumerActorSpec
     extends BaseSpec
@@ -32,7 +35,8 @@ class KafkaConsumerActorSpec
   val topic = "topic"
   val partitions = 3
   val consumerGroup = "defaultGroup"
-  private val pollingTimeout = 200
+  private val pollingTimeout = 200 millis
+  private val javaPollingTimeout = JavaDuration.ofMillis(pollingTimeout.toMillis)
 
   private val kafkaConsumerOption: KafkaConsumerOption[Int, String] = mock[KafkaConsumerOption[Int, String]]
   when(kafkaConsumerOption.topics).thenReturn(List(topic))
@@ -66,7 +70,7 @@ class KafkaConsumerActorSpec
         val expectedKRecords =
           consumerRecords.iterator().asScala.map(record => KRecord(record, consumerGroup)).toList
 
-        when(kafkaConsumer.poll(pollingTimeout)).thenReturn(consumerRecords)
+        when(kafkaConsumer.poll(javaPollingTimeout)).thenReturn(consumerRecords)
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
@@ -77,7 +81,7 @@ class KafkaConsumerActorSpec
 
       "fail with a KafkaPollingException if the kafka consumer fails" in {
 
-        when(kafkaConsumer.poll(pollingTimeout)).thenThrow(new RuntimeException("something bad happened!"))
+        when(kafkaConsumer.poll(javaPollingTimeout)).thenThrow(new RuntimeException("something bad happened!"))
 
         val recordsConsumedFuture = kafkaConsumerActor ? ConsumerToken
 
@@ -124,7 +128,7 @@ class KafkaConsumerActorSpec
         whenReady(commitResult) { _ =>
           val topicAndOffset = getOffsetsAndPartitions(kRecords)
           verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
-          verify(kafkaConsumer, invokedAtLeast(1)).poll(0)
+          verify(kafkaConsumer, invokedAtLeast(1)).poll(JavaDuration.ZERO)
         }
       }
 
@@ -149,7 +153,7 @@ class KafkaConsumerActorSpec
         whenReady(commitResult.failed) { exception =>
           val topicAndOffset = getOffsetsAndPartitions(kRecords)
           verify(kafkaConsumer).commitAsync(mockitoEq(topicAndOffset), any[OffsetCommitCallback])
-          verify(kafkaConsumer, invokedAtLeast(1)).poll(0)
+          verify(kafkaConsumer, invokedAtLeast(1)).poll(JavaDuration.ZERO)
           exception shouldBe a[KafkaCommitException]
         }
       }
