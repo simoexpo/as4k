@@ -56,22 +56,31 @@ class KafkaConsumerAgentSpec
 
     val kRecords = Range(0, 100).map(n => aKRecord(n, n, s"value$n", topic, n % partitions, groupId)).toList
 
+    "creating a new instance" should {
+
+      "fail if the number of consumers is less than 1" in {
+
+        an[IllegalArgumentException] shouldBe thrownBy(new KafkaConsumerAgent(kafkaConsumerOption, 0))
+
+      }
+    }
+
     "getting new records" should {
 
-      val KRecordsOne = kRecords.groupBy(_.metadata.partition)(0)
-      val KRecordsTwo = kRecords.groupBy(_.metadata.partition)(1)
-      val KRecordsThree = kRecords.groupBy(_.metadata.partition)(2)
+      val kRecordsOne = kRecords.groupBy(_.metadata.partition)(0)
+      val kRecordsTwo = kRecords.groupBy(_.metadata.partition)(1)
+      val kRecordsThree = kRecords.groupBy(_.metadata.partition)(2)
 
       "retrieve new records from all the underlyings consumer actors" in {
 
         val recordsConsumedFuture = kafkaConsumerAgent.askForRecords
 
         kafkaConsumerActorOne.expectMsg(ConsumerToken)
-        kafkaConsumerActorOne.reply(KRecordsOne)
+        kafkaConsumerActorOne.reply(kRecordsOne)
         kafkaConsumerActorTwo.expectMsg(ConsumerToken)
-        kafkaConsumerActorTwo.reply(KRecordsTwo)
+        kafkaConsumerActorTwo.reply(kRecordsTwo)
         kafkaConsumerActorThree.expectMsg(ConsumerToken)
-        kafkaConsumerActorThree.reply(KRecordsThree)
+        kafkaConsumerActorThree.reply(kRecordsThree)
 
         whenReady(recordsConsumedFuture) { recordsConsumed =>
           recordsConsumed should contain theSameElementsAs kRecords
@@ -83,12 +92,12 @@ class KafkaConsumerAgentSpec
         val recordsConsumedFuture = kafkaConsumerAgent.askForRecords
 
         kafkaConsumerActorOne.expectMsg(ConsumerToken)
-        kafkaConsumerActorOne.reply(KRecordsOne)
+        kafkaConsumerActorOne.reply(kRecordsOne)
         kafkaConsumerActorTwo.expectMsg(ConsumerToken)
         kafkaConsumerActorTwo.reply(
           akka.actor.Status.Failure(KafkaPollingException(new RuntimeException("Something bad happened!"))))
         kafkaConsumerActorThree.expectMsg(ConsumerToken)
-        kafkaConsumerActorThree.reply(KRecordsThree)
+        kafkaConsumerActorThree.reply(kRecordsThree)
 
         whenReady(recordsConsumedFuture.failed) { exception =>
           exception shouldBe a[KafkaPollingException]
@@ -101,9 +110,9 @@ class KafkaConsumerAgentSpec
 
         kafkaConsumerActorOne.expectMsg(ConsumerToken)
         kafkaConsumerActorTwo.expectMsg(ConsumerToken)
-        kafkaConsumerActorTwo.reply(KRecordsTwo)
+        kafkaConsumerActorTwo.reply(kRecordsTwo)
         kafkaConsumerActorThree.expectMsg(ConsumerToken)
-        kafkaConsumerActorThree.reply(KRecordsThree)
+        kafkaConsumerActorThree.reply(kRecordsThree)
 
         whenReady(recordsConsumedFuture.failed) { ex =>
           ex shouldBe a[KafkaConsumerTimeoutException]

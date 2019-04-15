@@ -21,13 +21,13 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
 
   private val benchmark = for {
     _ <- setUpBenchmarkEnv
-//    _ <- simpleConsumerBenchmark
-//    _ <- multiConsumerBenchmark
-//    _ <- simpleConsumerWithCommitBenchmark
+    _ <- simpleConsumerBenchmark
+    _ <- multiConsumerBenchmark
+    _ <- simpleConsumerWithCommitBenchmark
     _ <- simpleConsumerWithBatchCommitBenchmark
-//    _ <- simpleConsumerWithSimpleProducerBenchmark
-//    _ <- simpleConsumerWithTransactionalProducerBenchmark
-//    _ <- simpleConsumerWithTransactionalProducerWithCommitBenchmark
+    _ <- simpleConsumerWithSimpleProducerBenchmark
+    _ <- simpleConsumerWithTransactionalProducerBenchmark
+    _ <- simpleConsumerWithTransactionalProducerWithCommitBenchmark
   } yield ()
 
   benchmark.recover {

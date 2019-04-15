@@ -38,12 +38,9 @@ class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], consum
   def askForRecords: Future[List[KRecord[K, V]]] =
     Future
       .traverse(actors.values) { actor =>
-//        println(s"Asking $actor")
-        val a = (actor ? ConsumerToken).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
+        (actor ? ConsumerToken).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
           case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
         }
-//        println(s"Response from $actor")
-        a
       }
       .map(_.flatten)
 
