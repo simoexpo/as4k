@@ -1,12 +1,11 @@
 package org.simoexpo.as4k.consumer
 
-import java.time.Duration
-
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.Deserializer
 
 import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 case class KafkaConsumerOption[K, V] private (topics: Seq[String],
                                               pollingTimeout: FiniteDuration,
@@ -28,8 +27,6 @@ case class KafkaConsumerOption[K, V] private (topics: Seq[String],
 object KafkaConsumerOption {
 
   import pureconfig.generic.auto._
-  import scala.concurrent.duration._
-  import scala.language.postfixOps
 
   def apply[K, V](topic: Seq[String],
                   config: String,

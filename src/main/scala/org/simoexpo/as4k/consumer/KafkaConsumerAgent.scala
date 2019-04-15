@@ -1,46 +1,59 @@
 package org.simoexpo.as4k.consumer
 
 import akka.actor.{ActorRef, ActorSystem, PoisonPill}
-import akka.pattern.{AskTimeoutException, ask, gracefulStop}
+import akka.pattern.{ask, gracefulStop, AskTimeoutException}
 import akka.util.Timeout
 import org.simoexpo.as4k.consumer.KafkaConsumerActor.{CommitOffsets, ConsumerToken}
 import org.simoexpo.as4k.consumer.KafkaConsumerAgent.KafkaConsumerTimeoutException
 import org.simoexpo.as4k.model.CustomCallback.CustomCommitCallback
-import org.simoexpo.as4k.model.KRecord
+import org.simoexpo.as4k.model.{KRecord, NonEmptyList}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 
-class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V])(implicit actorSystem: ActorSystem, timeout: Timeout) {
+class KafkaConsumerAgent[K, V](consumerOption: KafkaConsumerOption[K, V], consumerCount: Int = 1)(
+    implicit actorSystem: ActorSystem,
+    timeout: Timeout) {
+
+  require(consumerCount > 0, "KafkaConsumerAgent should have at least one consumer")
+
   private implicit val ec: ExecutionContext = actorSystem.dispatcher
 
   val consumerGroup: String = consumerOption.groupId
   private val dispatcherConfig = consumerOption.dispatcher
 
-  protected val actor: ActorRef = {
+  protected val actors: NonEmptyList[ActorRef] = {
     val props = dispatcherConfig match {
       case Some(dispatcher) =>
         KafkaConsumerActor.props(consumerOption).withDispatcher(dispatcher)
       case None =>
         KafkaConsumerActor.props(consumerOption)
     }
-    actorSystem.actorOf(props)
+    NonEmptyList(actorSystem.actorOf(props), List.fill(consumerCount - 1)(actorSystem.actorOf(props)))
   }
 
-  def stopConsumer: Future[Boolean] = gracefulStop(actor, timeout.duration, PoisonPill)
+  def stopConsumer: Future[Boolean] =
+    Future.traverse(actors.values)(actor => gracefulStop(actor, timeout.duration, PoisonPill)).map(_.forall(identity))
 
   def askForRecords: Future[List[KRecord[K, V]]] =
-    (actor ? ConsumerToken).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
-      case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
-    }
+    Future
+      .traverse(actors.values) { actor =>
+//        println(s"Asking $actor")
+        val a = (actor ? ConsumerToken).map(_.asInstanceOf[List[KRecord[K, V]]]).recoverWith {
+          case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
+        }
+//        println(s"Response from $actor")
+        a
+      }
+      .map(_.flatten)
 
   def commit(record: KRecord[K, V], callback: Option[CustomCommitCallback] = None): Future[KRecord[K, V]] =
-    (actor ? CommitOffsets(Seq(record), callback)).map(_ => record).recoverWith {
+    (actors.head ? CommitOffsets(Seq(record), callback)).map(_ => record).recoverWith {
       case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
     }
 
   def commitBatch(records: Seq[KRecord[K, V]], callback: Option[CustomCommitCallback] = None): Future[Seq[KRecord[K, V]]] =
-    (actor ? CommitOffsets(records, callback)).map(_ => records).recoverWith {
+    (actors.head ? CommitOffsets(records, callback)).map(_ => records).recoverWith {
       case ex: AskTimeoutException => Future.failed(KafkaConsumerTimeoutException(timeout, ex))
     }
 

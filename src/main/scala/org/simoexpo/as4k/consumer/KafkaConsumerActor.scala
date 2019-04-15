@@ -2,7 +2,6 @@ package org.simoexpo.as4k.consumer
 
 import java.time.Duration
 import java.util
-import java.util.concurrent.TimeUnit
 
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash, Status}

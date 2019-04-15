@@ -22,7 +22,6 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
     with Stash {
 
   protected val producer: KafkaProducer[K, V] = producerOption.createOne()
-  protected val topic: String = producerOption.topic
 
   self ! InitProducer
 
@@ -37,19 +36,19 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
   }
 
   def initialized: Receive = {
-    case ProduceRecord(record, callback) if !producerOption.isTransactional =>
-      produce(record.asInstanceOf[KRecord[K, V]], callback)
+    case ProduceRecord(record, topic, callback) if !producerOption.isTransactional =>
+      produce(record.asInstanceOf[KRecord[K, V]], topic, callback)
 
-    case ProduceRecords(records) if producerOption.isTransactional =>
-      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]])
+    case ProduceRecords(records, topic) if producerOption.isTransactional =>
+      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], topic)
 
-    case ProduceRecordsAndCommit(records) if producerOption.isTransactional =>
-      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], true)
+    case ProduceRecordsAndCommit(records, topic) if producerOption.isTransactional =>
+      produceInTransaction(records.asInstanceOf[Seq[KRecord[K, V]]], topic, commitOffsets = true)
 
     case msg => log.warning("Unexpected message: {}", msg)
   }
 
-  private def produce(record: KRecord[K, V], customCallback: Option[CustomSendCallback]): Try[Unit] =
+  private def produce(record: KRecord[K, V], topic: String, customCallback: Option[CustomSendCallback]): Try[Unit] =
     Try {
       val callback = sendCallback(self, sender(), customCallback)
       producer.send(new ProducerRecord(topic, record.key, record.value), callback)
@@ -73,12 +72,12 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
       }
     }
 
-  private def produceInTransaction(records: Seq[KRecord[K, V]], commit: Boolean = false): Try[Unit] =
+  private def produceInTransaction(records: Seq[KRecord[K, V]], topic: String, commitOffsets: Boolean = false): Try[Unit] =
     Try {
       producer.beginTransaction()
       records.foreach(record => producer.send(new ProducerRecord(topic, record.key, record.value)))
-      if (commit && records.nonEmpty)
-        producer.sendOffsetsToTransaction(getOffsetsAndPartitions(records), records.head.metadata.consumedBy)
+      if (commitOffsets && records.nonEmpty)
+        producer.sendOffsetsToTransaction(getOffsetsAndPartitions(records), records.head.metadata.consumedByGroup)
       producer.commitTransaction()
       sender() ! Done
     }.recover {
@@ -108,9 +107,9 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
 
 private[as4k] object KafkaProducerActor {
 
-  case class ProduceRecordsAndCommit[K, V](records: Seq[KRecord[K, V]])
-  case class ProduceRecords[K, V](records: Seq[KRecord[K, V]])
-  case class ProduceRecord[K, V](record: KRecord[K, V], callback: Option[CustomSendCallback] = None)
+  case class ProduceRecordsAndCommit[K, V](records: Seq[KRecord[K, V]], topic: String)
+  case class ProduceRecords[K, V](records: Seq[KRecord[K, V]], topic: String)
+  case class ProduceRecord[K, V](record: KRecord[K, V], topic: String, callback: Option[CustomSendCallback] = None)
 
   case class KafkaProduceException(exception: Throwable) extends RuntimeException(s"Failed to produce records: $exception")
 

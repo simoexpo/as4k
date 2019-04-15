@@ -20,7 +20,7 @@ trait KafkaManagerUtility {
   private val adminClient = AdminClient.create(props)
 
   def createSimpleTopics(topics: Seq[String])(implicit ec: ExecutionContext): Future[Unit] = Future {
-    val newTopics = topics.map(topicName => new NewTopic(topicName, 1, 1)).asJava
+    val newTopics = topics.map(topicName => new NewTopic(topicName, 3, 1)).asJava
     adminClient.createTopics(newTopics).all().get()
   }
 

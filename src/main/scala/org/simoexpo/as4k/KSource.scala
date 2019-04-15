@@ -24,11 +24,13 @@ object KSource {
     def mapValue[Out](fun: V => Out): Source[KRecord[K, Out], Any] =
       stream.map(_.mapValue(fun))
 
-    def produce(parallelism: Int = 1)(kafkaProducerAgent: KafkaSimpleProducerAgent[K, V]): Source[KRecord[K, V], Any] =
-      stream.mapAsync(parallelism)(kafkaProducerAgent.produce)
+    def produce(parallelism: Int = 1)(topic: String)(
+        implicit kafkaProducerAgent: KafkaSimpleProducerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(parallelism)(record => kafkaProducerAgent.produce(record, topic))
 
-    def produceAndCommit(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[KRecord[K, V], Any] =
-      stream.mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record))
+    def produceAndCommit(topic: String)(
+        implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[KRecord[K, V], Any] =
+      stream.mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record, topic))
 
   }
 
@@ -40,11 +42,13 @@ object KSource {
         kafkaConsumerAgent.commitBatch(records, customCallback)
       }
 
-    def produce(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
-      stream.mapAsync(1)(kafkaProducerAgent.produce)
+    def produce(topic: String)(
+        implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+      stream.mapAsync(1)(records => kafkaProducerAgent.produce(records, topic))
 
-    def produceAndCommit(kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
-      stream.mapAsync(1)(records => kafkaProducerAgent.produceAndCommit(records))
+    def produceAndCommit(topic: String)(
+        implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Source[Seq[KRecord[K, V]], Any] =
+      stream.mapAsync(1)(records => kafkaProducerAgent.produceAndCommit(records, topic))
 
   }
 

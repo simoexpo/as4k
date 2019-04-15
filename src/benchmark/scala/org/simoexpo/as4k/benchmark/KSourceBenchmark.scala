@@ -12,21 +12,22 @@ import scala.util.control.NonFatal
 
 object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUtility {
 
-  val inTopic = "in_topic"
-  val outTopic = "out_topic"
+  private val inTopic = "in_topic"
+  private val outTopic = "out_topic"
 
-  val recordsSize = 1000000
+  private val recordsSize = 1000000
 
-  val kRecords = Stream.from(0).map(n => aKRecord(n, n.toString, s"value$n", "topic", 1, "defaultGroup"))
+  private val kRecords = Stream.from(0).map(n => aKRecord(n, n.toString, s"value$n", "topic", 1, "defaultGroup"))
 
-  val benchmark = for {
+  private val benchmark = for {
     _ <- setUpBenchmarkEnv
-    _ <- simpleConsumerBenchmark
-    _ <- simpleConsumerWithCommitBenchmark
+//    _ <- simpleConsumerBenchmark
+//    _ <- multiConsumerBenchmark
+//    _ <- simpleConsumerWithCommitBenchmark
     _ <- simpleConsumerWithBatchCommitBenchmark
-    _ <- simpleConsumerWithSimpleProducerBenchmark
-    _ <- simpleConsumerWithTransactionalProducerBenchmark
-    _ <- simpleConsumerWithTransactionalProducerWithCommitBenchmark
+//    _ <- simpleConsumerWithSimpleProducerBenchmark
+//    _ <- simpleConsumerWithTransactionalProducerBenchmark
+//    _ <- simpleConsumerWithTransactionalProducerWithCommitBenchmark
   } yield ()
 
   benchmark.recover {
@@ -36,13 +37,17 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
   }
 
   private def setUpBenchmarkEnv: Future[Unit] = {
-    val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption(inTopic, "my-simple-producer")
+    val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption("my-simple-producer")
     Console.println("Creating topics...")
     for {
       _ <- createSimpleTopics(Seq(inTopic, outTopic))
       _ = Console.println("Start producing...")
       kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
-      _ <- Source.fromIterator(() => kRecords.iterator).take(recordsSize).produce(100)(kafkaProducerAgent).runWith(Sink.ignore)
+      _ <- Source
+        .fromIterator(() => kRecords.iterator)
+        .take(recordsSize)
+        .produce(100)(inTopic)(kafkaProducerAgent)
+        .runWith(Sink.ignore)
       _ = Console.println("Finished producing messages")
       _ = Console.println("Clean up resources")
       _ <- kafkaProducerAgent.stopProducer
@@ -53,6 +58,23 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val benchName = "Simple Consumer"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(inTopic), "my-simple-consumer")
     val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
+    val bench = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize)
+    Console.println(s"Start $benchName Benchmark...")
+    val start = System.currentTimeMillis()
+    for {
+      _ <- bench.runWith(Sink.ignore)
+      elapsedTime = System.currentTimeMillis() - start
+      _ = printBenchTimeResult(benchName, elapsedTime)
+      _ = printBenchMsgPerSecResult(benchName, recordsSize, elapsedTime)
+      _ = Console.println("Clean up resources")
+      _ <- kafkaConsumerAgent.stopConsumer
+    } yield ()
+  }
+
+  private def multiConsumerBenchmark: Future[Unit] = {
+    val benchName = "Multi Consumer"
+    val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(inTopic), "my-simple-consumer")
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 3)
     val bench = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
@@ -88,7 +110,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val benchName = "Simple Consumer with Batch Commit"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-with-batch-commit")
-    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
+    val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption, 3)
     val batchSize = 1000
     val bench =
       KSource.fromKafkaConsumer(kafkaConsumerAgent).grouped(batchSize).commit(3)(kafkaConsumerAgent).take(recordsSize / batchSize)
@@ -108,11 +130,11 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val benchName = "Simple Consumer / Simple Producer"
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-two")
-    val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption(outTopic, "my-simple-producer")
+    val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption("my-simple-producer")
     val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
     val bench =
-      KSource.fromKafkaConsumer(kafkaConsumerAgent).produce(100)(kafkaProducerAgent).take(recordsSize)
+      KSource.fromKafkaConsumer(kafkaConsumerAgent).produce(100)(outTopic)(kafkaProducerAgent).take(recordsSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
     for {
@@ -131,12 +153,16 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-three")
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
-      KafkaProducerOption(outTopic, "my-transactional-producer")
+      KafkaProducerOption("my-transactional-producer")
     val batchSize = 100
     val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
     val bench =
-      KSource.fromKafkaConsumer(kafkaConsumerAgent).grouped(batchSize).produce(kafkaProducerAgent).take(recordsSize / batchSize)
+      KSource
+        .fromKafkaConsumer(kafkaConsumerAgent)
+        .grouped(batchSize)
+        .produce(outTopic)(kafkaProducerAgent)
+        .take(recordsSize / batchSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
     for {
@@ -155,7 +181,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
     val kafkaConsumerOption: KafkaConsumerOption[String, String] =
       KafkaConsumerOption(Seq(inTopic), "my-simple-consumer-four")
     val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
-      KafkaProducerOption(outTopic, "my-transactional-producer")
+      KafkaProducerOption("my-transactional-producer")
     val batchSize = 100
     val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
     val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
@@ -163,7 +189,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
       KSource
         .fromKafkaConsumer(kafkaConsumerAgent)
         .grouped(batchSize)
-        .produceAndCommit(kafkaProducerAgent)
+        .produceAndCommit(outTopic)(kafkaProducerAgent)
         .take(recordsSize / batchSize)
     Console.println(s"Start $benchName Benchmark...")
     val start = System.currentTimeMillis()
@@ -184,7 +210,7 @@ object KSourceBenchmark extends App with ActorSystemUtility with KafkaManagerUti
   private def printBenchMsgPerSecResult(benchName: String, recordSize: Int, time: Long): Unit =
     println(Console.GREEN + s"$benchName Benchmark - msg/s: ${recordsSize / time.toDouble * 1000}" + Console.RESET)
 
-  def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int, consumedBy: String): KRecord[K, V] = {
+  private def aKRecord[K, V](offset: Long, key: K, value: V, topic: String, partition: Int, consumedBy: String): KRecord[K, V] = {
     val metadata = KRecordMetadata(topic, partition, offset, System.currentTimeMillis(), consumedBy)
     KRecord(key, value, metadata)
   }

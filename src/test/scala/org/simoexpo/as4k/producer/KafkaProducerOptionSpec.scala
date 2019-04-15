@@ -6,18 +6,15 @@ class KafkaProducerOptionSpec extends BaseSpec {
 
   "KafkaProducerOption" should {
 
-    val topic = "topic"
-
     "create a KafkaProducer with the correct setting" in {
 
-      val kafkaProducerOption = KafkaProducerOption(topic, "my-simple-producer")
+      val kafkaProducerOption = KafkaProducerOption("my-simple-producer")
 
       val props = kafkaProducerOption.producerSetting
 
       noException should be thrownBy kafkaProducerOption.createOne()
 
       kafkaProducerOption.isTransactional shouldBe false
-      kafkaProducerOption.topic shouldBe topic
       props("bootstrap.servers") shouldBe "127.0.0.1:9092"
       props("acks") shouldBe "all"
       props("batch.size") shouldBe "16384"
@@ -29,14 +26,13 @@ class KafkaProducerOptionSpec extends BaseSpec {
 
     "create a KafkaProducer with the correct setting if transactional" in {
 
-      val kafkaProducerOption = KafkaProducerOption(topic, "my-transactional-producer")
+      val kafkaProducerOption = KafkaProducerOption("my-transactional-producer")
 
       val props = kafkaProducerOption.producerSetting
 
       noException should be thrownBy kafkaProducerOption.createOne()
 
       kafkaProducerOption.isTransactional shouldBe true
-      kafkaProducerOption.topic shouldBe topic
       props("bootstrap.servers") shouldBe "127.0.0.1:9092"
       props("acks") shouldBe "all"
       props("batch.size") shouldBe "16384"
@@ -49,7 +45,7 @@ class KafkaProducerOptionSpec extends BaseSpec {
 
     "fail to create KafkaConsumerOption if no consumer setting are found" in {
 
-      an[Exception] should be thrownBy KafkaProducerOption(topic, "no-setting")
+      an[Exception] should be thrownBy KafkaProducerOption("no-setting")
 
     }
 
