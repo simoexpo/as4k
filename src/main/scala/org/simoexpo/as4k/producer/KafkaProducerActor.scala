@@ -60,16 +60,14 @@ private[as4k] class KafkaProducerActor[K, V](producerOption: KafkaProducerOption
   private def sendCallback(consumerActor: ActorRef,
                            originalSender: ActorRef,
                            customCallback: Option[CustomSendCallback]): Callback =
-    new Callback {
-      override def onCompletion(recordMetadata: RecordMetadata, exception: Exception): Unit = {
-        Option(exception) match {
-          case None =>
-            originalSender ! Done
-          case Some(ex) =>
-            originalSender ! Status.Failure(KafkaProduceException(ex))
-        }
-        customCallback.foreach(callback => callback(recordMetadata, Option(exception)))
+    (recordMetadata: RecordMetadata, exception: Exception) => {
+      Option(exception) match {
+        case None =>
+          originalSender ! Done
+        case Some(ex) =>
+          originalSender ! Status.Failure(KafkaProduceException(ex))
       }
+      customCallback.foreach(callback => callback(recordMetadata, Option(exception)))
     }
 
   private def produceInTransaction(records: Seq[KRecord[K, V]], topic: String, commitOffsets: Boolean = false): Try[Unit] =

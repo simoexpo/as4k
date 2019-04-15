@@ -72,7 +72,7 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
     case PollToCommit => ()
 
     case CommitComplete =>
-      pendingCommit -= 1
+      removePendingCommit()
 
     case msg => log.warning("Unexpected message: {}", msg)
   }
@@ -94,19 +94,19 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
     }.flatten.toMap.asJava
   }
 
-  private def commitCallback(consumerActor: ActorRef, originalSender: ActorRef, customCallback: Option[CustomCommitCallback]) =
-    new OffsetCommitCallback {
-      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
-        Option(exception) match {
-          case None =>
-            originalSender ! Done
-            consumerActor ! CommitComplete
-          case Some(ex) =>
-            originalSender ! Status.Failure(KafkaCommitException(ex))
-            consumerActor ! CommitComplete
-        }
-        customCallback.foreach(callback => callback(offsets.asScala.toMap, Option(exception)))
+  private def commitCallback(consumerActor: ActorRef,
+                             originalSender: ActorRef,
+                             customCallback: Option[CustomCommitCallback]): OffsetCommitCallback =
+    (offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception) => {
+      Option(exception) match {
+        case None =>
+          originalSender ! Done
+          consumerActor ! CommitComplete
+        case Some(ex) =>
+          originalSender ! Status.Failure(KafkaCommitException(ex))
+          consumerActor ! CommitComplete
       }
+      customCallback.foreach(callback => callback(offsets.asScala.toMap, Option(exception)))
     }
 
   private def commitRecord(consumerActor: ActorRef,
@@ -124,6 +124,11 @@ private[as4k] class KafkaConsumerActor[K, V](consumerOption: KafkaConsumerOption
       self ! PollToCommit
     }
     pendingCommit += 1
+    ()
+  }
+
+  private def removePendingCommit(): Unit = {
+    pendingCommit -= 1
     ()
   }
 
