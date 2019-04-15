@@ -40,10 +40,10 @@ trait DataHelperSpec {
     new JavaFuture[RecordMetadata] {
       override def isCancelled: Boolean = throw new UnsupportedOperationException
 
-      override def get(): RecordMetadata = new RecordMetadata(new TopicPartition("topic", 1), 1, 1, 1, 1, 1, 1)
+      override def get(): RecordMetadata = new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L, 1, 1)
 
       override def get(timeout: Long, unit: JavaTimeUnit): RecordMetadata =
-        new RecordMetadata(new TopicPartition("topic", 1), 1, 1, 1, 1, 1, 1)
+        new RecordMetadata(new TopicPartition("topic", 1), 1L, 1L, 1L, 1L, 1, 1)
 
       override def cancel(mayInterruptIfRunning: Boolean): Boolean = throw new UnsupportedOperationException
 

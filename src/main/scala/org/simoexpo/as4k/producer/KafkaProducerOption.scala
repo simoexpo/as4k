@@ -5,8 +5,7 @@ import org.apache.kafka.common.serialization.Serializer
 
 import scala.collection.JavaConverters._
 
-case class KafkaProducerOption[K, V](topic: String,
-                                     producerSetting: Map[String, String],
+case class KafkaProducerOption[K, V](producerSetting: Map[String, String],
                                      dispatcher: Option[String],
                                      keySerializer: Option[Serializer[K]],
                                      valueSerializer: Option[Serializer[V]]) {
@@ -25,8 +24,7 @@ object KafkaProducerOption {
 
   import pureconfig.generic.auto._
 
-  def apply[K, V](topic: String,
-                  config: String,
+  def apply[K, V](config: String,
                   keySerializer: Option[Serializer[K]] = None,
                   valueSerializer: Option[Serializer[V]] = None): KafkaProducerOption[K, V] =
     pureconfig.loadConfig[ProducerConf](config) match {
@@ -34,7 +32,7 @@ object KafkaProducerOption {
         val kafkaProducerSetting = conf.producerSetting.map {
           case (key, value) => (key.replaceAll("-", "."), value)
         }
-        new KafkaProducerOption(topic, kafkaProducerSetting, conf.dispatcher, keySerializer, valueSerializer)
+        new KafkaProducerOption(kafkaProducerSetting, conf.dispatcher, keySerializer, valueSerializer)
       case Left(ex) => throw new IllegalArgumentException(s"Cannot load producer setting from $config: $ex")
     }
 

@@ -1,7 +1,7 @@
 package org.simoexpo.as4k.producer
 
 import akka.actor.{ActorRef, ActorSystem, PoisonPill}
-import akka.pattern.{AskTimeoutException, ask, gracefulStop}
+import akka.pattern.{ask, gracefulStop, AskTimeoutException}
 import akka.util.Timeout
 import KafkaProducerActor.ProduceRecord
 import org.simoexpo.as4k.model.KRecord
@@ -19,8 +19,8 @@ class KafkaSimpleProducerAgent[K, V](producerOption: KafkaProducerOption[K, V])(
   protected val actor: ActorRef =
     actorSystem.actorOf(KafkaProducerActor.props(producerOption))
 
-  def produce(record: KRecord[K, V]): Future[KRecord[K, V]] =
-    (actor ? ProduceRecord(record)).map(_ => record).recoverWith {
+  def produce(record: KRecord[K, V], topic: String): Future[KRecord[K, V]] =
+    (actor ? ProduceRecord(record, topic)).map(_ => record).recoverWith {
       case ex: AskTimeoutException => Future.failed(KafkaSimpleProducerTimeoutException(timeout, ex))
     }
 

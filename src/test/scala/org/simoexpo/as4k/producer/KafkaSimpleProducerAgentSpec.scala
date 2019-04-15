@@ -21,7 +21,6 @@ class KafkaSimpleProducerAgentSpec
 
   private val kafkaProducerOption: KafkaProducerOption[Int, String] = mock[KafkaProducerOption[Int, String]]
 
-  when(kafkaProducerOption.topic).thenReturn("producerTopic")
   when(kafkaProducerOption.createOne()).thenReturn(mock[KafkaProducer[Int, String]])
   when(kafkaProducerOption.isTransactional).thenReturn(false)
 
@@ -35,18 +34,19 @@ class KafkaSimpleProducerAgentSpec
 
   "KafkaSimpleProducerAgent" when {
 
-    val topic = "topic"
+    val inTopic = "input_topic"
+    val outTopic = "output_topic"
     val partition = 0
 
-    val kRecord = aKRecord(0, 0, "value0", topic, partition, "defaultGroup")
+    val kRecord = aKRecord(0, 0, "value0", inTopic, partition, "defaultGroup")
 
     "producing records" should {
 
       "produce a single record" in {
 
-        val produceResult = kafkaProducerAgent.produce(kRecord)
+        val produceResult = kafkaProducerAgent.produce(kRecord, outTopic)
 
-        kafkaProducerActor.expectMsg(ProduceRecord(kRecord))
+        kafkaProducerActor.expectMsg(ProduceRecord(kRecord, outTopic))
         kafkaProducerActor.reply(())
 
         whenReady(produceResult) { record =>
@@ -57,9 +57,9 @@ class KafkaSimpleProducerAgentSpec
 
       "fail with a KafkaProduceException if kafka producer actor fails" in {
 
-        val produceResult = kafkaProducerAgent.produce(kRecord)
+        val produceResult = kafkaProducerAgent.produce(kRecord, outTopic)
 
-        kafkaProducerActor.expectMsg(ProduceRecord(kRecord))
+        kafkaProducerActor.expectMsg(ProduceRecord(kRecord, outTopic))
         kafkaProducerActor.reply(
           akka.actor.Status.Failure(KafkaProduceException(new RuntimeException("Something bad happened!"))))
 
@@ -68,8 +68,8 @@ class KafkaSimpleProducerAgentSpec
 
       "fail with a KafkaSimpleProducerTimeoutException if the no response are given before the timeout" in {
 
-        val produceResult = kafkaProducerAgent.produce(kRecord)
-        kafkaProducerActor.expectMsg(ProduceRecord(kRecord))
+        val produceResult = kafkaProducerAgent.produce(kRecord, outTopic)
+        kafkaProducerActor.expectMsg(ProduceRecord(kRecord, outTopic))
 
         produceResult.failed.futureValue shouldBe a[KafkaSimpleProducerTimeoutException]
       }
@@ -80,7 +80,7 @@ class KafkaSimpleProducerAgentSpec
       "allow to close the producer actor properly" in {
 
         whenReady(kafkaProducerAgent.stopProducer) { _ =>
-          val exception = kafkaProducerAgent.produce(kRecord).failed.futureValue
+          val exception = kafkaProducerAgent.produce(kRecord, outTopic).failed.futureValue
           exception shouldBe an[KafkaSimpleProducerTimeoutException]
           exception.getMessage should include("had already been terminated")
         }

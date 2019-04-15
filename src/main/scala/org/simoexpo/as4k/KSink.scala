@@ -10,17 +10,22 @@ import scala.concurrent.Future
 
 object KSink {
 
-  def produce[K, V](kafkaProducerAgent: KafkaSimpleProducerAgent[K, V]): Sink[KRecord[K, V], Future[Done]] =
-    Flow[KRecord[K, V]].mapAsync(1)(record => kafkaProducerAgent.produce(record)).toMat(Sink.ignore)(Keep.right)
+  def produce[K, V](topic: String)(
+      implicit kafkaProducerAgent: KafkaSimpleProducerAgent[K, V]): Sink[KRecord[K, V], Future[Done]] =
+    Flow[KRecord[K, V]].mapAsync(1)(record => kafkaProducerAgent.produce(record, topic)).toMat(Sink.ignore)(Keep.right)
 
-  def produceSequence[K, V](kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[Seq[KRecord[K, V]], Future[Done]] =
-    Flow[Seq[KRecord[K, V]]].mapAsync(1)(record => kafkaProducerAgent.produce(record)).toMat(Sink.ignore)(Keep.right)
+  def produceSequence[K, V](topic: String)(
+      implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[Seq[KRecord[K, V]], Future[Done]] =
+    Flow[Seq[KRecord[K, V]]].mapAsync(1)(record => kafkaProducerAgent.produce(record, topic)).toMat(Sink.ignore)(Keep.right)
 
-  def produceAndCommit[K, V](kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[KRecord[K, V], Future[Done]] =
-    Flow[KRecord[K, V]].mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record)).toMat(Sink.ignore)(Keep.right)
+  def produceAndCommit[K, V](topic: String)(
+      implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[KRecord[K, V], Future[Done]] =
+    Flow[KRecord[K, V]].mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record, topic)).toMat(Sink.ignore)(Keep.right)
 
-  def produceSequenceAndCommit[K, V](
-      kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[Seq[KRecord[K, V]], Future[Done]] =
-    Flow[Seq[KRecord[K, V]]].mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record)).toMat(Sink.ignore)(Keep.right)
+  def produceSequenceAndCommit[K, V](topic: String)(
+      implicit kafkaProducerAgent: KafkaTransactionalProducerAgent[K, V]): Sink[Seq[KRecord[K, V]], Future[Done]] =
+    Flow[Seq[KRecord[K, V]]]
+      .mapAsync(1)(record => kafkaProducerAgent.produceAndCommit(record, topic))
+      .toMat(Sink.ignore)(Keep.right)
 
 }

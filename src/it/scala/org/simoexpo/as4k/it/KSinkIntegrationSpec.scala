@@ -1,13 +1,13 @@
 package org.simoexpo.as4k.it
 
 import akka.stream.scaladsl.{Sink, Source}
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
+import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.common.serialization.StringSerializer
 import org.scalatest.concurrent.ScalaFutures
-import org.simoexpo.as4k.consumer.{KafkaConsumerAgent, KafkaConsumerOption}
-import org.simoexpo.as4k.it.testing.{ActorSystemSpec, BaseSpec, LooseIntegrationPatience}
+import org.simoexpo.as4k.consumer.KafkaConsumerAgent
+import org.simoexpo.as4k.it.testing.{ActorSystemSpec, BaseSpec, DataHelperSpec, LooseIntegrationPatience}
 import org.simoexpo.as4k.model.{KRecord, KRecordMetadata}
-import org.simoexpo.as4k.producer.{KafkaProducerOption, KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
+import org.simoexpo.as4k.producer.{KafkaSimpleProducerAgent, KafkaTransactionalProducerAgent}
 import org.simoexpo.as4k.{KSink, KSource}
 
 import scala.util.Try
@@ -17,210 +17,175 @@ class KSinkIntegrationSpec
     with ActorSystemSpec
     with EmbeddedKafka
     with ScalaFutures
-    with LooseIntegrationPatience {
+    with LooseIntegrationPatience
+    with DataHelperSpec {
+
+  implicit private val serializer: StringSerializer = new StringSerializer
 
   "KSink" should {
 
-    val inputTopic = "in_topic"
-    val outputTopic = "out_topic"
-
-    implicit val config: EmbeddedKafkaConfig = EmbeddedKafkaConfig(kafkaPort = 9092, zooKeeperPort = 2181)
-
-    val kafkaConsumerOption: KafkaConsumerOption[String, String] = KafkaConsumerOption(Seq(outputTopic), "my-consumer")
-
-    val kafkaSimpleProducerOption: KafkaProducerOption[String, String] = KafkaProducerOption(outputTopic, "my-simple-producer")
-
-    val kafkaTransactionalProducerOption: KafkaProducerOption[String, String] =
-      KafkaProducerOption(outputTopic, "my-transactional-producer")
-
     val recordsSize = 100
-
-    val kRecords = Range(0, recordsSize).map(n => aKRecord(n, n.toString, s"value$n", inputTopic, 1, "defaultGroup")).toList
+    val kRecords = Range(0, recordsSize).map(n => aKRecord(n, n.toString, s"value$n", "input_topic", 1, "defaultGroup")).toList
+    val messages = Range(0, recordsSize).map { n =>
+      (n.toString, n.toString)
+    }
 
     "allow to produce message individually with a simple producer" in {
 
-      withRunningKafka {
-        Try(createCustomTopic(outputTopic))
+      val outputTopic = getRandomTopicName
 
-        implicit val serializer: StringSerializer = new StringSerializer
+      Try(createCustomTopic(outputTopic))
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
+      val kafkaConsumerOption = getKafkaSimpleConsumerOption(outputTopic)
+      val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaSimpleProducerOption)
+      val kafkaProducerOption = getKafkaSimpleProducerOption
+      val kafkaProducerAgent = new KafkaSimpleProducerAgent(kafkaProducerOption)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
-        Source.fromIterator(() => kRecords.iterator).runWith(KSink.produce(kafkaProducerAgent))
+      val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
+      Source.fromIterator(() => kRecords.iterator).runWith(KSink.produce(outputTopic)(kafkaProducerAgent))
 
-        whenReady(consumedRecords) { records =>
-          records.map(record => (record.key, record.value)) shouldBe kRecords.map(record => (record.key, record.value))
-        }
+      whenReady(consumedRecords) { records =>
+        records.map(record => (record.key, record.value)) shouldBe kRecords.map(record => (record.key, record.value))
       }
-
     }
 
     "allow to produce a sequence of message with a transactional producer" in {
 
-      withRunningKafka {
-        Try(createCustomTopic(outputTopic))
+      val outputTopic = getRandomTopicName
 
-        implicit val serializer: StringSerializer = new StringSerializer
+      Try(createCustomTopic(outputTopic))
 
-        val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
+      val kafkaConsumerOption = getKafkaSimpleConsumerOption(outputTopic)
+      val kafkaConsumerAgent = new KafkaConsumerAgent(kafkaConsumerOption)
 
-        val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
+      val kafkaProducerOption = getKafkaTransactionalProducerOption
+      val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaProducerOption)
 
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
-        Source.fromIterator(() => kRecords.iterator).grouped(10).runWith(KSink.produceSequence(kafkaProducerAgent))
+      val consumedRecords = KSource.fromKafkaConsumer(kafkaConsumerAgent).take(recordsSize).runWith(Sink.seq)
+      Source.fromIterator(() => kRecords.iterator).grouped(10).runWith(KSink.produceSequence(outputTopic)(kafkaProducerAgent))
 
-        whenReady(consumedRecords) { records =>
-          records.map(record => (record.key, record.value)) shouldBe kRecords.map(record => (record.key, record.value))
-        }
+      whenReady(consumedRecords) { records =>
+        records.map(record => (record.key, record.value)) shouldBe kRecords.map(record => (record.key, record.value))
       }
-
     }
 
     "allow to produce and commit message individually in a transaction with a transactional producer" in {
 
-      val messages = Range(0, recordsSize).map { n =>
-        (n.toString, n.toString)
-      }
+      val inputTopic = getRandomTopicName
+      val outputTopic = getRandomTopicName
 
-      withRunningKafka {
-        Try(createCustomTopic(inputTopic))
+      Try(createCustomTopic(inputTopic, partitions = 3))
+      Try(createCustomTopic(outputTopic))
+      publishToKafka(inputTopic, messages)
 
-        Try(createCustomTopic(outputTopic))
+      val kafkaConsumerOption = getKafkaSimpleConsumerOption(inputTopic)
+      val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 3)
+      val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 3)
 
-        implicit val serializer: StringSerializer = new StringSerializer
+      val kafkaProducerOption = getKafkaTransactionalProducerOption
+      val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaProducerOption)
 
-        publishToKafka(inputTopic, messages)
+      val kafkaTransactionConsumerOption = getKafkaTransactionalConsumerOption(outputTopic)
+      val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
 
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
+      val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
 
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
+      for {
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentOne)
+          .take(recordsSize / 2)
+          .runWith(KSink.produceAndCommit(outputTopic)(kafkaProducerAgent))
+        _ <- kafkaConsumerAgentOne.stopConsumer
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentTwo)
+          .take(recordsSize / 2)
+          .runWith(KSink.produceAndCommit(outputTopic)(kafkaProducerAgent))
+      } yield ()
 
-        val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
-
-        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
-          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
-
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
-
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
-
-        for {
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(recordsSize / 2)
-            .runWith(KSink.produceAndCommit(kafkaProducerAgent))
-          _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(recordsSize / 2)
-            .runWith(KSink.produceAndCommit(kafkaProducerAgent))
-        } yield ()
-
-        whenReady(consumedRecords) { consumedMessages =>
-          consumedMessages.map(record => (record.key, record.value)) shouldBe messages
-        }
+      whenReady(consumedRecords) { consumedMessages =>
+        consumedMessages.map(record => (record.key, record.value)) should contain theSameElementsAs messages
       }
     }
 
     "allow to produce and commit a sequence of message in a transaction with a transactional producer" in {
 
-      val messages = Range(0, recordsSize).map { n =>
-        (n.toString, n.toString)
+      val inputTopic = getRandomTopicName
+      val outputTopic = getRandomTopicName
+
+      Try(createCustomTopic(inputTopic, partitions = 3))
+      Try(createCustomTopic(outputTopic))
+      publishToKafka(inputTopic, messages)
+
+      val kafkaConsumerOption = getKafkaSimpleConsumerOption(inputTopic)
+      val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 3)
+      val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 3)
+
+      val kafkaProducerOption = getKafkaTransactionalProducerOption
+      val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaProducerOption)
+
+      val kafkaTransactionConsumerOption = getKafkaTransactionalConsumerOption(outputTopic)
+      val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
+
+      val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
+
+      for {
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentOne)
+          .take(recordsSize / 2)
+          .grouped(10)
+          .runWith(KSink.produceSequenceAndCommit(outputTopic)(kafkaProducerAgent))
+        _ <- kafkaConsumerAgentOne.stopConsumer
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentTwo)
+          .take(recordsSize / 2)
+          .grouped(10)
+          .runWith(KSink.produceSequenceAndCommit(outputTopic)(kafkaProducerAgent))
+      } yield ()
+
+      whenReady(consumedRecords) { consumedMessages =>
+        consumedMessages.map(record => (record.key, record.value)) should contain theSameElementsAs messages
       }
-
-      withRunningKafka {
-        Try(createCustomTopic(inputTopic))
-
-        Try(createCustomTopic(outputTopic))
-
-        implicit val serializer: StringSerializer = new StringSerializer
-
-        publishToKafka(inputTopic, messages)
-
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
-
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
-
-        val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
-
-        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
-          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
-
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
-
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
-
-        for {
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(recordsSize / 2)
-            .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
-          _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(recordsSize / 2)
-            .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
-        } yield ()
-
-        whenReady(consumedRecords) { consumedMessages =>
-          consumedMessages.map(record => (record.key, record.value)) shouldBe messages
-        }
-      }
-
     }
 
     "allow to produce and commit a sequence of message in a transaction with a transactional producer in a multi-partition topic" in {
 
-      val messages = Range(0, recordsSize).map { n =>
-        (n.toString, n.toString)
+      val inputTopic = getRandomTopicName
+      val outputTopic = getRandomTopicName
+
+      Try(createCustomTopic(topic = inputTopic, partitions = 3))
+      Try(createCustomTopic(outputTopic))
+      publishToKafka(inputTopic, messages)
+
+      val kafkaConsumerOption = getKafkaSimpleConsumerOption(inputTopic)
+      val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption, 3)
+      val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption, 3)
+
+      val kafkaProducerOption = getKafkaTransactionalProducerOption
+      val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaProducerOption)
+
+      val kafkaTransactionConsumerOption = getKafkaTransactionalConsumerOption(outputTopic)
+      val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
+
+      val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
+
+      for {
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentOne)
+          .take(recordsSize / 2)
+          .grouped(10)
+          .runWith(KSink.produceSequenceAndCommit(outputTopic)(kafkaProducerAgent))
+        _ <- kafkaConsumerAgentOne.stopConsumer
+        _ <- KSource
+          .fromKafkaConsumer(kafkaConsumerAgentTwo)
+          .take(recordsSize / 2)
+          .grouped(10)
+          .runWith(KSink.produceSequenceAndCommit(outputTopic)(kafkaProducerAgent))
+      } yield ()
+
+      whenReady(consumedRecords) { consumedMessages =>
+        consumedMessages.map(record => (record.key, record.value)) should contain theSameElementsAs messages
       }
-
-      withRunningKafka {
-        Try(createCustomTopic(topic = inputTopic, partitions = 3))
-
-        Try(createCustomTopic(outputTopic))
-
-        implicit val serializer: StringSerializer = new StringSerializer
-
-        publishToKafka(inputTopic, messages)
-
-        val kafkaConsumerAgentOne = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
-
-        val kafkaConsumerAgentTwo = new KafkaConsumerAgent(kafkaConsumerOption.copy(topics = Seq(inputTopic)))
-
-        val kafkaProducerAgent = new KafkaTransactionalProducerAgent(kafkaTransactionalProducerOption)
-
-        val kafkaTransactionConsumerOption: KafkaConsumerOption[String, String] =
-          KafkaConsumerOption(Seq(outputTopic), "my-transaction-consumer")
-
-        val kafkaTransactionConsumerAgent = new KafkaConsumerAgent(kafkaTransactionConsumerOption)
-
-        val consumedRecords = KSource.fromKafkaConsumer(kafkaTransactionConsumerAgent).take(recordsSize).runWith(Sink.seq)
-
-        for {
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentOne)
-            .take(recordsSize / 2)
-            .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
-          _ <- kafkaConsumerAgentOne.stopConsumer
-          _ <- KSource
-            .fromKafkaConsumer(kafkaConsumerAgentTwo)
-            .take(recordsSize / 2)
-            .grouped(10)
-            .runWith(KSink.produceSequenceAndCommit(kafkaProducerAgent))
-        } yield ()
-
-        whenReady(consumedRecords) { consumedMessages =>
-          consumedMessages.map(record => (record.key, record.value)).toSet shouldBe messages.toSet
-        }
-      }
-
     }
   }
 

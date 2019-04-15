@@ -5,9 +5,9 @@
         </encoder>
     </appender>
 
-    <logger name="org.simoexpo.as4k" level="OFF"/>
+    <logger name="org.simoexpo.as4k" level="DEBUG"/>
 
-    <root level="OFF">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

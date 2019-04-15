@@ -32,9 +32,9 @@ class KafkaConsumerActorSpec
     with BeforeAndAfterEach
     with DataHelperSpec {
 
-  val topic = "topic"
-  val partitions = 3
-  val consumerGroup = "defaultGroup"
+  private val topic = "topic"
+  private val partitions = 3
+  private val consumerGroup = "defaultGroup"
   private val pollingTimeout = 200 millis
   private val javaPollingTimeout = JavaDuration.ofMillis(pollingTimeout.toMillis)
 
